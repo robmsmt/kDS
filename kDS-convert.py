@@ -1,8 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
-
-from IPython.core.display import HTML, display
-from IPython.display import display, Audio
 
 import sys
 import base64
@@ -10,15 +6,12 @@ import struct
 import os
 import fnmatch
 import re
-# import librosa
-# import librosa.display
 
 import scipy.io.wavfile as wav
-# from scikits.audiolab import Sndfile, play
 import python_speech_features as p
 
-
-datapath = "/home/rob/Dropbox/UCL/DIS/Admin/LDC/timit/"
+datapath = "/cluster/project2/darkspeech/rob/DeepSpeech/data/timit/"
+#datapath = "/home/rob/Dropbox/UCL/DIS/Admin/LDC/timit/"
 target = datapath+"TIMIT/"
 
 
