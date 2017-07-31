@@ -3,4 +3,5 @@
 .DS_Store* 
 Archive
 *.pyc
+.~lock.*
 

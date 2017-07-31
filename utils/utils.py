@@ -49,3 +49,8 @@ def int_to_text_sequence(seq):
         ch = index_map[c]
         text_sequence.append(ch)
     return text_sequence
+
+#
+#>>> from utils import int_to_text_sequence
+#>>> a = [2,22,10,11,21,2,13,11,6,1,21,2,8,20,17]
+#>>> b = int_to_text_sequence(a)

@@ -166,7 +166,7 @@ for x in train_list_trans + test_list_trans + valid_list_trans:
 
 print(max_intseq_length)
 
-num_classes = len(char_map)+1 ##need +1 for ctc null char
+num_classes = len(char_map)+2 ##need +2 for ctc null char
 
 print(num_classes)
 
@@ -453,7 +453,7 @@ print(model.summary(line_length=80))
 
 ## Make it smaller for perpose of demo
 train_steps = len(train_list_wavs)//batch_size
-valid_steps = len(valid_list_wavs)//batch_size
+valid_steps = (len(valid_list_wavs)//batch_size)//2
 
 print(train_steps, valid_steps)
 
@@ -466,7 +466,7 @@ model.fit_generator(generator=traindata.next_train(),
                     callbacks=[viz_cb],  ##create custom callback to handle stop for valid
 
                     validation_data=validdata.next_train(),
-                    validation_steps=valid_steps/2,
+                    validation_steps=valid_steps,
                     initial_epoch=0)
 
 model.predict_generator( testdata.next_test(), 5, workers=1, verbose=1)
