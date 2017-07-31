@@ -71,7 +71,7 @@ except Exception as e:
 
 
 global batch_size
-batch_size = 8
+batch_size = 1
 
 # Network Params
 fc_size = 2048
@@ -155,12 +155,10 @@ coreml_model.license = 'BSD'
 coreml_model.short_description = 'Performs keras ds '
 
 # Set feature descriptions manually
-#coreml_model.input_description['the_input'] = 'Audio input'
-# coreml_model.input_description['bathrooms'] = 'Number of bathrooms'
-# coreml_model.input_description['size'] = 'Size (in square feet)'
+coreml_model.input_description['input1'] = 'Audio input'
 
 # Set the output descriptions
-# coreml_model.output_description['out'] = 'Audio transcription'
+coreml_model.output_description['output1'] = 'Audio transcription'
 
 # SAVE
 coreml_model.save('kds.mlmodel')

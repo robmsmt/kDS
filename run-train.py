@@ -10,13 +10,15 @@ import struct
 import os
 import fnmatch
 import re
+import socket
 
 import scipy.io.wavfile as wav
 import python_speech_features as p
 
 import pandas as pd
 
-# import librosa
+import itertools
+import editdistance
 
 #####################################################
 
@@ -31,15 +33,26 @@ from keras.layers import Dense, Activation, Bidirectional, Reshape, Lambda, Inpu
 from keras.optimizers import SGD, adam
 from keras.preprocessing.sequence import pad_sequences
 # from keras.utils.data_utils import Sequence
-
+from keras.layers import TimeDistributed
 from keras.layers.merge import add, concatenate
 import keras.callbacks
 
 print(keras.__version__) ##be careful with 2.0.6 as 2.0.4 tested with CoreML
 
+sys.path.append('./utils/')
+from utils import clean, read_text, text_to_int_sequence, int_to_text_sequence
+from char_map import char_map, index_map
+
 #######################################################
-datapath = "/cluster/project2/darkspeech/rob/DeepSpeech/data/timit/"
-#datapath = "/home/rob/Dropbox/UCL/DIS/Admin/LDC/timit/"
+
+hostname = socket.gethostname().lower()
+
+## Use hostname to detect my laptop OR else it's cluster
+if hostname in ('rs-e5550').lower():
+    datapath = "/home/rob/Dropbox/UCL/DIS/Admin/LDC/timit/"
+else:
+    datapath = "/cluster/project2/darkspeech/rob/DeepSpeech/data/timit/"
+
 target = datapath + "TIMIT/"
 
 train_list_wavs, train_list_trans, train_list_mfcc, train_list_fin = [], [], [], []
@@ -47,37 +60,6 @@ valid_list_wavs, valid_list_trans, valid_list_mfcc, valid_list_fin = [], [], [],
 test_list_wavs, test_list_trans, test_list_mfcc, test_list_fin = [], [], [], []
 
 file_count = 0
-
-
-# token = re.compile("[\w-]+|'m|'t|'ll|'ve|'d|'s|\'")
-def clean(word):
-    ## LC ALL & strip fullstop, comma and semi-colon which are not required
-    new = word.lower().replace('.', '')
-    new = new.replace(',', '')
-    new = new.replace(';', '')
-    new = new.replace('"', '')
-    new = new.replace('!', '')
-    new = new.replace('?', '')
-    new = new.replace(':', '')
-    new = new.replace('-', '')
-    return new
-
-
-def read_text(full_wav):
-    # need to remove _rif.wav (8chars) then add .TXT
-    trans_file = full_wav[:-8] + ".TXT"
-    with open(trans_file, "r") as f:
-        for line in f:
-            split = line.split()
-            start = split[0]
-            end = split[1]
-            t_list = split[2:]
-            trans = ""
-        # insert cleaned word (lowercase plus removed bad punct)
-        for t in t_list:
-            trans = trans + ' ' + clean(t)
-
-    return start, end, trans
 
 
 for root, dirnames, filenames in os.walk(target):
@@ -170,59 +152,6 @@ all_vocab = set(all_words)
 print("Words:",len(all_words))
 print("Vocab:",len(all_vocab))
 
-# From Baidu ba-dls-deepspeech - https://github.com/baidu-research/ba-dls-deepspeech
-
-char_map_str = """
-' 1
-<SPACE> 2
-a 3
-b 4
-c 5
-d 6
-e 7
-f 8
-g 9
-h 10
-i 11
-j 12
-k 13
-l 14
-m 15
-n 16
-o 17
-p 18
-q 19
-r 20
-s 21
-t 22
-u 23
-v 24
-w 25
-x 26
-y 27
-z 28
-"""
-
-char_map = {}
-index_map = {}
-
-for line in char_map_str.strip().split('\n'):
-    ch, index = line.split()
-    char_map[ch] = int(index)
-    index_map[int(index)] = ch
-index_map[2] = ' '
-
-
-def text_to_int_sequence(text):
-    """ Use a character map and convert text to an integer sequence """
-    int_sequence = []
-    for c in text:
-        if c == ' ':
-            ch = char_map['<SPACE>']
-        else:
-            ch = char_map[c]
-        int_sequence.append(ch)
-    return int_sequence
 
 
 ##CHECK
@@ -237,13 +166,13 @@ for x in train_list_trans + test_list_trans + valid_list_trans:
 
 print(max_intseq_length)
 
-num_classes = len(char_map)
+num_classes = len(char_map)+1 ##need +1 for ctc null char
 
 print(num_classes)
 
 
 global batch_size
-batch_size = 8
+batch_size = 4
 
 
 def get_intseq(trans):
@@ -300,6 +229,8 @@ class timitWavSeq(keras.callbacks.Callback):
             print(batch_x)
             print(batch_y_trans)
 
+        # source_str = []
+
         X_data = np.array([get_mfcc(file_name) for file_name in batch_x])
         #             print("1. X_data.shape:",X_data.shape)  # ('1. X_data.shape:', (2, 778, 26))
 
@@ -307,6 +238,8 @@ class timitWavSeq(keras.callbacks.Callback):
 
         labels = np.array([get_intseq(l) for l in batch_y_trans])
         #             print("2. labels.shape:",labels.shape) # ('2. labels.shape:', (2, 80))
+
+        source_str = np.array([l for l in batch_y_trans])
 
         assert (labels.shape == (self.batch_size, max_intseq_length))
 
@@ -322,7 +255,8 @@ class timitWavSeq(keras.callbacks.Callback):
             'the_input': X_data,
             'the_labels': labels,
             'input_length': input_length,
-            'label_length': label_length
+            'label_length': label_length,
+            'source_str': source_str
         }
 
         outputs = {'ctc': np.zeros([batch_size])}
@@ -366,6 +300,61 @@ class timitWavSeq(keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs={}):
         print("EPOCH END")
+
+
+## todo replace with greedy/beam search
+
+def decode_batch(test_func, word_batch):
+   out = test_func([word_batch])[0]
+   ret = []
+   for j in range(out.shape[0]):
+
+       out_best = list(np.argmax(out[j,:],1))
+       out_best = [k for k,g in itertools.groupby(out_best)]
+
+       outStr = int_to_text_sequence(out_best)
+       ret.append(''.join(outStr))
+
+   print(ret)
+   return ret
+
+
+class VizCallback(keras.callbacks.Callback):
+    def __init__(self, test_func, validdata_next_val):
+        self.test_func = test_func
+        self.validdata_next_val = validdata_next_val
+
+    def wer(self):
+        pass
+
+    def show_edit_distance(self, num):
+        num_left = num
+        mean_norm_ed = 0.0
+        mean_ed = 0.0
+        while num_left > 0:
+            word_batch = next(self.validdata_next_val)[0]
+            num_proc = min(word_batch['the_input'].shape[0], num_left)
+            decoded_res = decode_batch(self.test_func, word_batch['the_input'][0:num_proc])
+
+            for j in range(0, num_proc):
+                # if num_left % num/10 == 0:
+                #     print(''.join(decoded_res[j]))
+
+                edit_dist = editdistance.eval(decoded_res[j], word_batch['source_str'][j])
+                mean_ed += float(edit_dist)
+                mean_norm_ed += float(edit_dist) / len(word_batch['source_str'][j])
+            num_left -= num_proc
+        mean_norm_ed = mean_norm_ed / num
+        mean_ed = mean_ed / num
+        print('\nOut of %d samples:  Mean edit distance: %.3f Mean normalized edit distance: %0.3f'
+              % (num, mean_ed, mean_norm_ed))
+
+    def on_epoch_end(self, epoch, logs=None):
+        # save weights
+        self.show_edit_distance(256)
+        #word_batch = next(self.validdata_next_val)[0]
+        #result = decode_batch(self.test_func, word_batch['the_input'][0])
+        #print("Truth: {} \nTranscribed: {}".format(word_batch['source_str'], result[0]))
 
 sort_train_fin_list = df_train['fin'].tolist()
 sort_train_trans_list = df_train['trans'].tolist()
@@ -429,16 +418,16 @@ rnn_1f = SimpleRNN(rnn_size, return_sequences=True, go_backwards=False,
 rnn_1b = SimpleRNN(rnn_size, return_sequences=True, go_backwards=True,
                    kernel_initializer='he_normal', name='rnn_b')(x) #>>(?, ?, 512)
 
-rnn_merged = add([rnn_1f, rnn_1b]) #>>(?, ?, 512)
+#rnn_merged = add([rnn_1f, rnn_1b]) #>>(?, ?, 512)
 
 #TODO TRY THIS FROM: https://github.com/fchollet/keras/issues/2838
-# rnn_bidir1 = merge([rnn_fwd1, rnn_bwd1], mode='concat')
+rnn_bidir = concatenate([rnn_1f, rnn_1b])
 # predictions = TimeDistributed(Dense(output_class_size, activation='softmax'))(rnn_bidir1)
-
-x = Activation('relu', name='birelu')(rnn_merged) #>>(?, ?, 512)
+#x = Activation('relu', name='birelu')(rnn_merged) #>>(?, ?, 512)
+y_pred = Dense(num_classes, activation='softmax')(rnn_bidir)
 
 # Layer 5 FC Layer
-y_pred = Dense(fc_size, name='fc5', activation='relu')(x) #>>(?, 778, 2048)
+#y_pred = Dense(fc_size, name='fc5', activation='relu')(x) #>>(?, 778, 2048)
 
 
 # Change shape
@@ -468,22 +457,25 @@ valid_steps = len(valid_list_wavs)//batch_size
 
 print(train_steps, valid_steps)
 
-model.fit_generator(generator=traindata.next_train(),
-                    steps_per_epoch=train_steps,  # 28
-                    epochs=4,
-                    callbacks=[traindata],  ##create custom callback to handle stop for valid
+test_func = K.function([input_data],[y_pred])
+viz_cb = VizCallback(test_func, validdata.next_val())
 
-                    validation_data=None,
-                    validation_steps=None,
+model.fit_generator(generator=traindata.next_train(),
+                    steps_per_epoch=8,  # 28
+                    epochs=2,
+                    callbacks=[viz_cb],  ##create custom callback to handle stop for valid
+
+                    validation_data=validdata.next_train(),
+                    validation_steps=2,
                     initial_epoch=0)
 
 model.predict_generator( testdata.next_test(), 5, workers=1, verbose=1)
 
-
-# serialize model to JSON
-with open("ds_ctc_model.json", "w") as json_file:
-    json_file.write(model.to_json())
-
-# serialize weights to HDF5
-model.save_weights("ds_ctc_model_weights.h5")
+#
+# # serialize model to JSON
+# with open("ds_ctc_model.json", "w") as json_file:
+#     json_file.write(model.to_json())
+#
+# # serialize weights to HDF5
+# model.save_weights("ds_ctc_model_weights.h5")
 
