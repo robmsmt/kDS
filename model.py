@@ -249,7 +249,7 @@ batch_size = 8
 def get_intseq(trans):
     # PAD
 
-    print(trans)
+    #print(trans)
     while (len(trans) < max_intseq_length):
         trans = trans + ' '  # replace with a space char to pad
     t = text_to_int_sequence(trans)
@@ -331,27 +331,31 @@ class timitWavSeq(keras.callbacks.Callback):
 
     def next_train(self):
         while 1:
+            if (self.cur_train_index+1)*self.batch_size >= len(self.wavpath)-self.batch_size:
+                self.cur_train_index = 0
+
             ret = self.get_batch(self.cur_train_index)
             self.cur_train_index += 1
-            if self.cur_train_index >= len(self.wavpath):
-                self.cur_train_index = 0
+
             yield ret
 
     def next_val(self):
         while 1:
+            if (self.cur_val_index+1)*self.batch_size >= len(self.wavpath)-self.batch_size:
+                self.cur_val_index = 0
             ret = self.get_batch(self.cur_val_index)
             self.cur_val_index += 1
-            if self.cur_val_index >= len(self.wavpath):
-                self.cur_val_index = 0
+
             yield ret
 
     def next_test(self):
         while 1:
-            ret = self.get_batch(self.cur_test_index)
-
-            self.cur_test_index += 1
-            if self.cur_test_index >= len(self.wavpath):
+            if (self.cur_test_index+1)*self.batch_size >= len(self.wavpath)-self.batch_size:
                 self.cur_test_index = 0
+
+            ret = self.get_batch(self.cur_test_index)
+            self.cur_test_index += 1
+
             yield ret
 
     def on_train_begin(self, logs={}):
