@@ -105,12 +105,18 @@ c = {'wavs': test_list_wavs,
      'fin': test_list_fin,
      'trans': test_list_trans}
 
+al = {'wavs': train_list_wavs+valid_list_wavs+test_list_wavs,
+     'fin': train_list_fin+valid_list_fin+test_list_fin,
+     'trans': train_list_trans+valid_list_trans+test_list_trans}
+
+df_all = pd.DataFrame(al, columns=['fin', 'trans', 'wavs'], dtype=int)
 df_train = pd.DataFrame(a, columns=['fin', 'trans', 'wavs'], dtype=int)
 df_valid = pd.DataFrame(b, columns=['fin', 'trans', 'wavs'], dtype=int)
 df_test = pd.DataFrame(c, columns=['fin', 'trans', 'wavs'], dtype=int)
 
 sortagrad = True
 if sortagrad:
+    df_all = df_all.sort_values(by='fin', ascending=True)
     df_train = df_train.sort_values(by='fin', ascending=True)
     df_valid = df_valid.sort_values(by='fin', ascending=True)
     df_test = df_test.sort_values(by='fin', ascending=True)
@@ -315,7 +321,7 @@ def decode_batch(test_func, word_batch):
        outStr = int_to_text_sequence(out_best)
        ret.append(''.join(outStr))
 
-   print(ret)
+   #print(ret)
    return ret
 
 
@@ -337,15 +343,20 @@ class VizCallback(keras.callbacks.Callback):
             decoded_res = decode_batch(self.test_func, word_batch['the_input'][0:num_proc])
 
             for j in range(0, num_proc):
-                # if num_left % num/10 == 0:
-                #     print(''.join(decoded_res[j]))
-
                 edit_dist = editdistance.eval(decoded_res[j], word_batch['source_str'][j])
                 mean_ed += float(edit_dist)
                 mean_norm_ed += float(edit_dist) / len(word_batch['source_str'][j])
+
             num_left -= num_proc
+
+            for o in range(0, 3): #3 samples
+                print("Truth: {} \nTranscribed: {}".format(word_batch['source_str'][o], decoded_res[o]))
+
         mean_norm_ed = mean_norm_ed / num
         mean_ed = mean_ed / num
+
+
+
         print('\nOut of %d samples:  Mean edit distance: %.3f Mean normalized edit distance: %0.3f'
               % (num, mean_ed, mean_norm_ed))
 
@@ -355,6 +366,10 @@ class VizCallback(keras.callbacks.Callback):
         #word_batch = next(self.validdata_next_val)[0]
         #result = decode_batch(self.test_func, word_batch['the_input'][0])
         #print("Truth: {} \nTranscribed: {}".format(word_batch['source_str'], result[0]))
+
+sort_all_fin_list = df_all['fin'].tolist()
+sort_all_trans_list = df_all['trans'].tolist()
+sort_all_wav_list = df_all['wavs'].tolist()
 
 sort_train_fin_list = df_train['fin'].tolist()
 sort_train_trans_list = df_train['trans'].tolist()
@@ -368,6 +383,7 @@ sort_test_fin_list = df_test['fin'].tolist()
 sort_test_trans_list = df_test['trans'].tolist()
 sort_test_wav_list = df_test['wavs'].tolist()
 
+alldata = timitWavSeq(wavpath=sort_all_wav_list, transcript=sort_all_trans_list, finish=sort_all_fin_list)
 traindata = timitWavSeq(wavpath=sort_train_wav_list, transcript=sort_train_trans_list, finish=sort_train_fin_list)
 validdata = timitWavSeq(wavpath=sort_valid_wav_list, transcript=sort_valid_trans_list, finish=sort_valid_fin_list)
 testdata = timitWavSeq(wavpath=sort_test_wav_list, transcript=sort_test_trans_list, finish=sort_test_fin_list)
@@ -452,17 +468,18 @@ model.compile(loss={'ctc': lambda y_true, y_pred: y_pred}, optimizer=sgd)
 print(model.summary(line_length=80))
 
 ## Make it smaller for perpose of demo
+all_steps = len(sort_all_wav_list)//batch_size
 train_steps = len(train_list_wavs)//batch_size
 valid_steps = (len(valid_list_wavs)//batch_size)//2
 
-print(train_steps, valid_steps)
+print(all_steps,train_steps, valid_steps)
 
 test_func = K.function([input_data],[y_pred])
 viz_cb = VizCallback(test_func, validdata.next_val())
 
-model.fit_generator(generator=traindata.next_train(),
-                    steps_per_epoch=train_steps,  # 28
-                    epochs=10,
+model.fit_generator(generator=alldata.next_train(),
+                    steps_per_epoch=all_steps,  # 28
+                    epochs=20,
                     callbacks=[viz_cb],  ##create custom callback to handle stop for valid
 
                     validation_data=validdata.next_train(),
