@@ -12,7 +12,7 @@ source /home/rsmith/python-2.7.13.source.sh
 #export CUDA_VISIBLE_DEVICES=`nvidia-smi --query-gpu=index,memory.used --format=csv,nounits,noheader | awk -F "," '/, 0/ {print $1;exit}'` 
 
 #export CUDA_VISIBLE_DEVICES='1,2,-1,0'
-export CUDA_VISIBLE_DEVICES='2'
+export CUDA_VISIBLE_DEVICES='0'
 
 echo $CUDA_VISIBLE_DEVICES
 

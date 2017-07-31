@@ -172,7 +172,7 @@ print(num_classes)
 
 
 global batch_size
-batch_size = 4
+batch_size = 8
 
 
 def get_intseq(trans):
@@ -461,21 +461,21 @@ test_func = K.function([input_data],[y_pred])
 viz_cb = VizCallback(test_func, validdata.next_val())
 
 model.fit_generator(generator=traindata.next_train(),
-                    steps_per_epoch=8,  # 28
-                    epochs=2,
+                    steps_per_epoch=train_steps,  # 28
+                    epochs=10,
                     callbacks=[viz_cb],  ##create custom callback to handle stop for valid
 
                     validation_data=validdata.next_train(),
-                    validation_steps=2,
+                    validation_steps=valid_steps/2,
                     initial_epoch=0)
 
 model.predict_generator( testdata.next_test(), 5, workers=1, verbose=1)
 
 #
 # # serialize model to JSON
-# with open("ds_ctc_model.json", "w") as json_file:
-#     json_file.write(model.to_json())
+with open("ds_ctc_model.json", "w") as json_file:
+     json_file.write(model.to_json())
 #
 # # serialize weights to HDF5
-# model.save_weights("ds_ctc_model_weights.h5")
+model.save_weights("ds_ctc_model_weights.h5")
 
