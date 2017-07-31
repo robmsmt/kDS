@@ -46,7 +46,10 @@ def int_to_text_sequence(seq):
     """ Use a index map and convert int to a text sequence """
     text_sequence = []
     for c in seq:
-        ch = index_map[c]
+        if c == 29:
+            ch = '@'
+        else:
+            ch = index_map[c]
         text_sequence.append(ch)
     return text_sequence
 
