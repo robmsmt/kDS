@@ -39,7 +39,8 @@ print(keras.__version__) ##be careful with 2.0.6 as 2.0.4 tested with CoreML
 
 #######################################################
 
-datapath = "/home/rob/Dropbox/UCL/DIS/Admin/LDC/timit/"
+#datapath = "/home/rob/Dropbox/UCL/DIS/Admin/LDC/timit/"
+datapath = "/cluster/project2/darkspeech/rob/DeepSpeech/data/timit/"
 target = datapath + "TIMIT/"
 
 train_list_wavs, train_list_trans, train_list_mfcc, train_list_fin = [], [], [], []
