@@ -475,7 +475,7 @@ print(train_steps, valid_steps)
 
 model.fit_generator(generator=traindata.next_train(),
                     steps_per_epoch=train_steps,  # 28
-                    epochs=2,
+                    epochs=4,
                     callbacks=[traindata],  ##create custom callback to handle stop for valid
 
                     validation_data=None,
