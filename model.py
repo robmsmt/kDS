@@ -291,14 +291,19 @@ class timitWavSeq(keras.callbacks.Callback):
     #             return len(self.wavpath) // self.batch_size
 
     def get_batch(self, idx):
-        print(idx)
-        print(self.cur_train_index)
+        #print(idx)
+        #print(self.cur_train_index)
 
         batch_x = self.wavpath[idx * self.batch_size:(idx + 1) * self.batch_size]
         batch_y_trans = self.transcript[idx * self.batch_size:(idx + 1) * self.batch_size]
 
-        assert (len(batch_x) == self.batch_size)
-        assert (len(batch_y_trans) == self.batch_size)
+        try:
+            assert (len(batch_x) == self.batch_size)
+            assert (len(batch_y_trans) == self.batch_size)
+        except Exception as e:
+            print(e)
+            print(batch_x)
+            print(batch_y_trans)
 
         X_data = np.array([get_mfcc(file_name) for file_name in batch_x])
         #             print("1. X_data.shape:",X_data.shape)  # ('1. X_data.shape:', (2, 778, 26))
