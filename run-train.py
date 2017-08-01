@@ -30,6 +30,7 @@ from keras import backend as K
 from keras.models import Model, Sequential
 from keras.layers.recurrent import SimpleRNN
 from keras.layers import Dense, Activation, Bidirectional, Reshape, Lambda, Input
+from keras.layers.recurrent import _time_distributed_dense
 from keras.optimizers import SGD, adam
 from keras.preprocessing.sequence import pad_sequences
 # from keras.utils.data_utils import Sequence
@@ -218,6 +219,8 @@ class timitWavSeq(keras.callbacks.Callback):
         self.cur_val_index = 0
         self.cur_test_index = 0
 
+        print(self.transcript)
+
     #         def __len__(self):
     #             ## returns number of batches in the sequence
     #             return len(self.wavpath) // self.batch_size
@@ -270,6 +273,9 @@ class timitWavSeq(keras.callbacks.Callback):
         return (inputs, outputs)
 
     def next_train(self):
+        print("next train")
+        print(self.cur_train_index)
+
         while 1:
             if (self.cur_train_index + 1) * self.batch_size >= len(self.wavpath) - self.batch_size:
                 self.cur_train_index = 0
@@ -333,36 +339,30 @@ class VizCallback(keras.callbacks.Callback):
     def wer(self):
         pass
 
-    def show_edit_distance(self, num):
-        num_left = num
+    def show_edit_distance_batch(self):
         mean_norm_ed = 0.0
         mean_ed = 0.0
-        while num_left > 0:
-            word_batch = next(self.validdata_next_val)[0]
-            num_proc = min(word_batch['the_input'].shape[0], num_left)
-            decoded_res = decode_batch(self.test_func, word_batch['the_input'][0:num_proc])
 
-            for j in range(0, num_proc):
-                edit_dist = editdistance.eval(decoded_res[j], word_batch['source_str'][j])
-                mean_ed += float(edit_dist)
-                mean_norm_ed += float(edit_dist) / len(word_batch['source_str'][j])
+        word_batch = next(self.validdata_next_val)[0]
+        #num_proc = batch_size #min of batchsize OR num_left
+        decoded_res = decode_batch(self.test_func, word_batch['the_input'][0:batch_size])
 
-            num_left -= num_proc
+        for j in range(0, batch_size):
+            edit_dist = editdistance.eval(decoded_res[j], word_batch['source_str'][j])
+            mean_ed += float(edit_dist)
+            mean_norm_ed += float(edit_dist) / len(word_batch['source_str'][j])
+            print("\n{}.Truth:{}\n{}.Trans:{}".format(str(j), word_batch['source_str'][j], str(j), decoded_res[j]))
 
-            for o in range(0, 3): #3 samples
-                print("Truth: {} \nTranscribed: {}".format(word_batch['source_str'][o], decoded_res[o]))
+        mean_norm_ed = mean_norm_ed
+        mean_ed = mean_ed
 
-        mean_norm_ed = mean_norm_ed / num
-        mean_ed = mean_ed / num
+        print('\nOut of %d batch samples:  Mean edit distance: %.3f Mean normalized edit distance: %0.3f'
+              % (1, mean_ed, mean_norm_ed))
 
-
-
-        print('\nOut of %d samples:  Mean edit distance: %.3f Mean normalized edit distance: %0.3f'
-              % (num, mean_ed, mean_norm_ed))
 
     def on_epoch_end(self, epoch, logs=None):
         # save weights
-        self.show_edit_distance(256)
+        self.show_edit_distance_batch()
         #word_batch = next(self.validdata_next_val)[0]
         #result = decode_batch(self.test_func, word_batch['the_input'][0])
         #print("Truth: {} \nTranscribed: {}".format(word_batch['source_str'], result[0]))
@@ -383,7 +383,8 @@ sort_test_fin_list = df_test['fin'].tolist()
 sort_test_trans_list = df_test['trans'].tolist()
 sort_test_wav_list = df_test['wavs'].tolist()
 
-alldata = timitWavSeq(wavpath=sort_all_wav_list, transcript=sort_all_trans_list, finish=sort_all_fin_list)
+alldata = timitWavSeq(wavpath=sort_all_wav_list[:8], transcript=sort_all_trans_list[:8], finish=sort_all_fin_list[:8])
+alldata2 = timitWavSeq(wavpath=sort_all_wav_list[:8], transcript=sort_all_trans_list[:8], finish=sort_all_fin_list[:8])
 traindata = timitWavSeq(wavpath=sort_train_wav_list, transcript=sort_train_trans_list, finish=sort_train_fin_list)
 validdata = timitWavSeq(wavpath=sort_valid_wav_list, transcript=sort_valid_trans_list, finish=sort_valid_fin_list)
 testdata = timitWavSeq(wavpath=sort_test_wav_list, transcript=sort_test_trans_list, finish=sort_test_fin_list)
@@ -440,7 +441,7 @@ rnn_1b = SimpleRNN(rnn_size, return_sequences=True, go_backwards=True,
 rnn_bidir = concatenate([rnn_1f, rnn_1b])
 # predictions = TimeDistributed(Dense(output_class_size, activation='softmax'))(rnn_bidir1)
 #x = Activation('relu', name='birelu')(rnn_merged) #>>(?, ?, 512)
-y_pred = Dense(num_classes, activation='softmax')(rnn_bidir)
+y_pred = TimeDistributed(Dense(num_classes, activation='softmax'))(rnn_bidir)
 
 # Layer 5 FC Layer
 #y_pred = Dense(fc_size, name='fc5', activation='relu')(x) #>>(?, 778, 2048)
@@ -474,19 +475,36 @@ valid_steps = (len(valid_list_wavs)//batch_size)//2
 
 print(all_steps,train_steps, valid_steps)
 
+
+print(alldata.transcript)
+print(alldata.transcript)
+# print(next(alldata.next_train()))
+# print(next(alldata.next_train()))
+# print(next(alldata.next_train()))
+# print(next(alldata.next_train()))
+# print(next(alldata.next_train()))
+# print(next(alldata.next_train()))
+# print(next(alldata.next_train()))
+# print(next(alldata.next_train()))
+# print(next(alldata.next_train()))
+# print(next(alldata.next_train()))
+# print(next(alldata.next_train()))
+# print(next(alldata.next_train()))
+# print(next(alldata.next_train()))
+
 test_func = K.function([input_data],[y_pred])
-viz_cb = VizCallback(test_func, validdata.next_val())
+viz_cb = VizCallback(test_func, alldata2.next_val())
 
 model.fit_generator(generator=alldata.next_train(),
-                    steps_per_epoch=all_steps,  # 28
-                    epochs=20,
+                    steps_per_epoch=8*10,  # 28
+                    epochs=500,
                     callbacks=[viz_cb],  ##create custom callback to handle stop for valid
 
-                    validation_data=validdata.next_train(),
-                    validation_steps=valid_steps,
+                    validation_data=alldata2.next_val(),
+                    validation_steps=1,
                     initial_epoch=0)
 
-model.predict_generator( testdata.next_test(), 5, workers=1, verbose=1)
+model.predict_generator( alldata2.next_test(), 8, workers=1, verbose=1)
 
 #
 # # serialize model to JSON
