@@ -441,6 +441,8 @@ rnn_1b = SimpleRNN(rnn_size, return_sequences=True, go_backwards=True,
 rnn_bidir = concatenate([rnn_1f, rnn_1b])
 # predictions = TimeDistributed(Dense(output_class_size, activation='softmax'))(rnn_bidir1)
 #x = Activation('relu', name='birelu')(rnn_merged) #>>(?, ?, 512)
+
+#y_pred = Dense(num_classes, activation='softmax')(rnn_bidir)
 y_pred = TimeDistributed(Dense(num_classes, activation='softmax'))(rnn_bidir)
 
 # Layer 5 FC Layer
