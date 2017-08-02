@@ -510,7 +510,7 @@ test_func = K.function([input_data, K.learning_phase()],[y_pred])
 viz_cb = VizCallback(test_func, validdata.next_val())
 
 model.fit_generator(generator=traindata.next_train(),
-                    steps_per_epoch=3,  # 28
+                    steps_per_epoch=train_steps,  # 28
                     epochs=100,
                     callbacks=[viz_cb, traindata, validdata],  ##create custom callback to handle stop for valid
 
