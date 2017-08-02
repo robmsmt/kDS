@@ -389,6 +389,13 @@ class VizCallback(keras.callbacks.Callback):
         #result = decode_batch(self.test_func, word_batch['the_input'][0])
         #print("Truth: {} \nTranscribed: {}".format(word_batch['source_str'], result[0]))
 
+        # # serialize model to JSON
+        with open("ds_ctc_model_epochbackup.json", "w") as json_file:
+            json_file.write(model.to_json())
+        # # serialize weights to HDF5
+        model.save_weights("ds_ctc_model_weights_epochbackup.h5")
+
+
 # sort_all_fin_list = df_all['fin'].tolist()
 # sort_all_trans_list = df_all['trans'].tolist()
 # sort_all_wav_list = df_all['wavs'].tolist()
@@ -502,6 +509,8 @@ valid_steps = (len(valid_list_wavs)//batch_size)//2
 
 print(train_steps, valid_steps)
 
+if hostname in ('rs-e5550').lower():
+    train_steps = 3
 
 
 # iterate = K.function([input_img, K.learning_phase()], [loss, grads])
