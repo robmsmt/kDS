@@ -179,7 +179,7 @@ print(num_classes)
 
 
 global batch_size
-batch_size = 8
+batch_size = 16
 
 
 def get_intseq(trans):
@@ -219,7 +219,7 @@ class timitWavSeq(keras.callbacks.Callback):
         self.cur_val_index = 0
         self.cur_test_index = 0
 
-        print(self.transcript)
+        # print(self.transcript)
 
     #         def __len__(self):
     #             ## returns number of batches in the sequence
@@ -383,8 +383,8 @@ sort_test_fin_list = df_test['fin'].tolist()
 sort_test_trans_list = df_test['trans'].tolist()
 sort_test_wav_list = df_test['wavs'].tolist()
 
-alldata = timitWavSeq(wavpath=sort_all_wav_list[:8], transcript=sort_all_trans_list[:8], finish=sort_all_fin_list[:8])
-alldata2 = timitWavSeq(wavpath=sort_all_wav_list[:8], transcript=sort_all_trans_list[:8], finish=sort_all_fin_list[:8])
+# alldata = timitWavSeq(wavpath=sort_all_wav_list[:32], transcript=sort_all_trans_list[:32], finish=sort_all_fin_list[:32])
+# alldata2 = timitWavSeq(wavpath=sort_all_wav_list[:32], transcript=sort_all_trans_list[:32], finish=sort_all_fin_list[:32])
 traindata = timitWavSeq(wavpath=sort_train_wav_list, transcript=sort_train_trans_list, finish=sort_train_fin_list)
 validdata = timitWavSeq(wavpath=sort_valid_wav_list, transcript=sort_valid_trans_list, finish=sort_valid_fin_list)
 testdata = timitWavSeq(wavpath=sort_test_wav_list, transcript=sort_test_trans_list, finish=sort_test_fin_list)
@@ -472,41 +472,26 @@ print(model.summary(line_length=80))
 
 ## Make it smaller for perpose of demo
 all_steps = len(sort_all_wav_list)//batch_size
-train_steps = len(train_list_wavs)//batch_size
+train_steps = len(train_list_wavs)
 valid_steps = (len(valid_list_wavs)//batch_size)//2
 
 print(all_steps,train_steps, valid_steps)
 
 
-print(alldata.transcript)
-print(alldata.transcript)
-# print(next(alldata.next_train()))
-# print(next(alldata.next_train()))
-# print(next(alldata.next_train()))
-# print(next(alldata.next_train()))
-# print(next(alldata.next_train()))
-# print(next(alldata.next_train()))
-# print(next(alldata.next_train()))
-# print(next(alldata.next_train()))
-# print(next(alldata.next_train()))
-# print(next(alldata.next_train()))
-# print(next(alldata.next_train()))
-# print(next(alldata.next_train()))
-# print(next(alldata.next_train()))
 
 test_func = K.function([input_data],[y_pred])
-viz_cb = VizCallback(test_func, alldata2.next_val())
+viz_cb = VizCallback(test_func, validdata.next_val())
 
-model.fit_generator(generator=alldata.next_train(),
-                    steps_per_epoch=8*10,  # 28
+model.fit_generator(generator=traindata.next_train(),
+                    steps_per_epoch=train_steps,  # 28
                     epochs=500,
                     callbacks=[viz_cb],  ##create custom callback to handle stop for valid
 
-                    validation_data=alldata2.next_val(),
+                    validation_data=validdata.next_val(),
                     validation_steps=1,
                     initial_epoch=0)
 
-model.predict_generator( alldata2.next_test(), 8, workers=1, verbose=1)
+model.predict_generator(testdata.next_test(), 8, workers=1, verbose=1)
 
 #
 # # serialize model to JSON
