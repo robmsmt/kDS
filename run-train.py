@@ -317,6 +317,19 @@ class timitWavSeq(keras.callbacks.Callback):
 
             yield ret
 
+    def export_test_mfcc(self):
+        testset = next(self.next_test())[0]
+        b = testset['the_input'][0:self.batch_size] ## export all mfcc's in batch #26 x 29 ?
+        w = testset['source_str'][0:self.batch_size]
+        print("exporting:", type(b))
+        print(b.shape)
+        print(w.shape)
+
+        for i in range(0,b.shape[0]):
+            np.savetxt('./test_mfccs/mfcc_test_{}.csv'.format(i), b[i,:,:], delimiter=',')
+            #np.savetxt('./test_mfccs/word_test_{}.out'.format(i), w[i], delimiter=',')
+            print(w[i])
+
     # def on_train_begin(self, logs={}):
     #     # print("train begin")
     #     pass
@@ -367,6 +380,7 @@ class VizCallback(keras.callbacks.Callback):
 
         word_batch = next(self.validdata_next_val)[0]
         #num_proc = batch_size #min of batchsize OR num_left
+        ## todo make run-test from this
         decoded_res = decode_batch(self.test_func, word_batch['the_input'][0:batch_size])
 
         for j in range(0, batch_size):
@@ -418,6 +432,8 @@ traindata = timitWavSeq(wavpath=sort_train_wav_list, transcript=sort_train_trans
 validdata = timitWavSeq(wavpath=sort_valid_wav_list, transcript=sort_valid_trans_list, finish=sort_valid_fin_list)
 testdata = timitWavSeq(wavpath=sort_test_wav_list, transcript=sort_test_trans_list, finish=sort_test_fin_list)
 
+#todo this is not a ready output
+#testdata.export_test_mfcc()
 
 # Define CTC loss
 def ctc_lambda_func(args):
