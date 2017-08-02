@@ -273,9 +273,6 @@ class timitWavSeq(keras.callbacks.Callback):
         return (inputs, outputs)
 
     def next_train(self):
-        print("next train")
-        print(self.cur_train_index)
-
         while 1:
             if (self.cur_train_index + 1) * self.batch_size >= len(self.wavpath) - self.batch_size:
                 self.cur_train_index = 0
@@ -472,7 +469,7 @@ print(model.summary(line_length=80))
 
 ## Make it smaller for perpose of demo
 all_steps = len(sort_all_wav_list)//batch_size
-train_steps = len(train_list_wavs)
+train_steps = len(train_list_wavs)//batch_size
 valid_steps = (len(valid_list_wavs)//batch_size)//2
 
 print(all_steps,train_steps, valid_steps)
