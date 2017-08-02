@@ -29,7 +29,7 @@ import keras
 from keras import backend as K
 from keras.models import Model, Sequential
 from keras.layers.recurrent import SimpleRNN
-from keras.layers import Dense, Activation, Bidirectional, Reshape, Lambda, Input
+from keras.layers import Dense, Activation, Bidirectional, Reshape, Lambda, Input, Dropout
 from keras.layers.recurrent import _time_distributed_dense
 from keras.optimizers import SGD, adam
 from keras.preprocessing.sequence import pad_sequences
@@ -40,9 +40,13 @@ import keras.callbacks
 
 print(keras.__version__) ##be careful with 2.0.6 as 2.0.4 tested with CoreML
 
+from sklearn.utils import shuffle
+
+
 sys.path.append('./utils/')
 from utils import clean, read_text, text_to_int_sequence, int_to_text_sequence
 from char_map import char_map, index_map
+
 
 #######################################################
 
@@ -274,8 +278,12 @@ class timitWavSeq(keras.callbacks.Callback):
 
     def next_train(self):
         while 1:
+            assert (self.batch_size <= len(self.wavpath))
             if (self.cur_train_index + 1) * self.batch_size >= len(self.wavpath) - self.batch_size:
                 self.cur_train_index = 0
+                self.wavpath, self.transcript, self.finish = shuffle(self.wavpath,
+                                                                     self.transcript,
+                                                                     self.finish)
 
             ret = self.get_batch(self.cur_train_index)
             self.cur_train_index += 1
@@ -284,8 +292,12 @@ class timitWavSeq(keras.callbacks.Callback):
 
     def next_val(self):
         while 1:
+            assert (self.batch_size <= len(self.wavpath))
             if (self.cur_val_index + 1) * self.batch_size >= len(self.wavpath) - self.batch_size:
                 self.cur_val_index = 0
+                self.wavpath, self.transcript, self.finish = shuffle(self.wavpath,
+                                                                     self.transcript,
+                                                                     self.finish)
             ret = self.get_batch(self.cur_val_index)
             self.cur_val_index += 1
 
@@ -293,8 +305,12 @@ class timitWavSeq(keras.callbacks.Callback):
 
     def next_test(self):
         while 1:
+            assert(self.batch_size<=len(self.wavpath))
             if (self.cur_test_index + 1) * self.batch_size >= len(self.wavpath) - self.batch_size:
                 self.cur_test_index = 0
+                self.wavpath, self.transcript, self.finish = shuffle(self.wavpath,
+                                                                     self.transcript,
+                                                                     self.finish)
 
             ret = self.get_batch(self.cur_test_index)
             self.cur_test_index += 1
@@ -308,7 +324,10 @@ class timitWavSeq(keras.callbacks.Callback):
         print("on epoch begin")
 
     def on_epoch_end(self, epoch, logs={}):
-        print("EPOCH END")
+        print("EPOCH END - shuffling data")
+        self.wavpath, self.transcript, self.finish = shuffle(self.wavpath,
+                                                             self.transcript,
+                                                             self.finish)
 
 
 ## todo replace with greedy/beam search
@@ -364,9 +383,9 @@ class VizCallback(keras.callbacks.Callback):
         #result = decode_batch(self.test_func, word_batch['the_input'][0])
         #print("Truth: {} \nTranscribed: {}".format(word_batch['source_str'], result[0]))
 
-sort_all_fin_list = df_all['fin'].tolist()
-sort_all_trans_list = df_all['trans'].tolist()
-sort_all_wav_list = df_all['wavs'].tolist()
+# sort_all_fin_list = df_all['fin'].tolist()
+# sort_all_trans_list = df_all['trans'].tolist()
+# sort_all_wav_list = df_all['wavs'].tolist()
 
 sort_train_fin_list = df_train['fin'].tolist()
 sort_train_trans_list = df_train['trans'].tolist()
@@ -413,34 +432,36 @@ fc_size = 2048
 rnn_size = 512
 mfcc_features = 26
 max_mfcclength_audio = 778
+dropout = [0.2, 0.5, 0.3] ## initial / mid / end
 
 X = np.zeros([batch_size, max_mfcclength_audio, mfcc_features])
 
 # Creates a tensor there are always 26 MFCC
 input_data = Input(name='the_input', shape=X.shape[1:]) # >>(?, 778, 26)
+dr_input = Dropout(dropout[0])(input_data)
 
 # First 3 FC layers
-x = Dense(fc_size, name='fc1', activation='relu')(input_data) # >>(?, 778, 2048)
+x = Dense(fc_size, name='fc1', activation='relu')(dr_input) # >>(?, 778, 2048)
+x = Dropout(dropout[1])(x)
 x = Dense(fc_size, name='fc2', activation='relu')(x) # >>(?, 778, 2048)
+x = Dropout(dropout[1])(x)
 x = Dense(fc_size, name='fc3', activation='relu')(x) # >>(?, 778, 2048)
+x = Dropout(dropout[1])(x)
 
 # Layer 4 BiDirectional RNN
 
 rnn_1f = SimpleRNN(rnn_size, return_sequences=True, go_backwards=False,
-                   kernel_initializer='he_normal', name='rnn_f')(x) #>>(?, ?, 512)
+                   kernel_initializer='he_normal', name='rnn_f', dropout=dropout[1])(x) #>>(?, ?, 512)
 
 rnn_1b = SimpleRNN(rnn_size, return_sequences=True, go_backwards=True,
-                   kernel_initializer='he_normal', name='rnn_b')(x) #>>(?, ?, 512)
+                   kernel_initializer='he_normal', name='rnn_b', dropout=dropout[1])(x) #>>(?, ?, 512)
 
 #rnn_merged = add([rnn_1f, rnn_1b]) #>>(?, ?, 512)
 
 #TODO TRY THIS FROM: https://github.com/fchollet/keras/issues/2838
 rnn_bidir = concatenate([rnn_1f, rnn_1b])
-# predictions = TimeDistributed(Dense(output_class_size, activation='softmax'))(rnn_bidir1)
-#x = Activation('relu', name='birelu')(rnn_merged) #>>(?, ?, 512)
-
-#y_pred = Dense(num_classes, activation='softmax')(rnn_bidir)
-y_pred = TimeDistributed(Dense(num_classes, activation='softmax'))(rnn_bidir)
+dr_rnn_bidir = Dropout(dropout[2])(rnn_bidir)
+y_pred = TimeDistributed(Dense(num_classes, activation='softmax'))(dr_rnn_bidir)
 
 # Layer 5 FC Layer
 #y_pred = Dense(fc_size, name='fc5', activation='relu')(x) #>>(?, 778, 2048)
@@ -468,11 +489,11 @@ model.compile(loss={'ctc': lambda y_true, y_pred: y_pred}, optimizer=sgd)
 print(model.summary(line_length=80))
 
 ## Make it smaller for perpose of demo
-all_steps = len(sort_all_wav_list)//batch_size
+# all_steps = len(sort_all_wav_list)//batch_size
 train_steps = len(train_list_wavs)//batch_size
 valid_steps = (len(valid_list_wavs)//batch_size)//2
 
-print(all_steps,train_steps, valid_steps)
+print(train_steps, valid_steps)
 
 
 
@@ -482,7 +503,7 @@ viz_cb = VizCallback(test_func, validdata.next_val())
 model.fit_generator(generator=traindata.next_train(),
                     steps_per_epoch=train_steps,  # 28
                     epochs=500,
-                    callbacks=[viz_cb],  ##create custom callback to handle stop for valid
+                    callbacks=[viz_cb, traindata, validdata],  ##create custom callback to handle stop for valid
 
                     validation_data=validdata.next_val(),
                     validation_steps=1,
