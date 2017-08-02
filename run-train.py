@@ -318,10 +318,12 @@ class timitWavSeq(keras.callbacks.Callback):
             yield ret
 
     def on_train_begin(self, logs={}):
-        print("train begin")
+        # print("train begin")
+        pass
 
     def on_epoch_begin(self, epochs, logs={}):
-        print("on epoch begin")
+        # print("on epoch begin")
+        pass
 
     def on_epoch_end(self, epoch, logs={}):
         print("EPOCH END - shuffling data")
@@ -433,35 +435,36 @@ rnn_size = 512
 mfcc_features = 26
 max_mfcclength_audio = 778
 dropout = [0.2, 0.5, 0.3] ## initial / mid / end
+# K.set_learning_phase(1)
 
 X = np.zeros([batch_size, max_mfcclength_audio, mfcc_features])
 
 # Creates a tensor there are always 26 MFCC
 input_data = Input(name='the_input', shape=X.shape[1:]) # >>(?, 778, 26)
-dr_input = Dropout(dropout[0])(input_data)
+# dr_input = Dropout(dropout[0])(input_data)
 
 # First 3 FC layers
-x = Dense(fc_size, name='fc1', activation='relu')(dr_input) # >>(?, 778, 2048)
-x = Dropout(dropout[1])(x)
+x = Dense(fc_size, name='fc1', activation='relu')(input_data) # >>(?, 778, 2048)
+# x = Dropout(dropout[1])(x)
 x = Dense(fc_size, name='fc2', activation='relu')(x) # >>(?, 778, 2048)
-x = Dropout(dropout[1])(x)
+# x = Dropout(dropout[1])(x)
 x = Dense(fc_size, name='fc3', activation='relu')(x) # >>(?, 778, 2048)
-x = Dropout(dropout[1])(x)
+# x = Dropout(dropout[1])(x)
 
 # Layer 4 BiDirectional RNN
 
 rnn_1f = SimpleRNN(rnn_size, return_sequences=True, go_backwards=False,
-                   kernel_initializer='he_normal', name='rnn_f', dropout=dropout[1])(x) #>>(?, ?, 512)
+                   kernel_initializer='he_normal', name='rnn_f')(x) #>>(?, ?, 512) , dropout=dropout[1]
 
 rnn_1b = SimpleRNN(rnn_size, return_sequences=True, go_backwards=True,
-                   kernel_initializer='he_normal', name='rnn_b', dropout=dropout[1])(x) #>>(?, ?, 512)
+                   kernel_initializer='he_normal', name='rnn_b')(x) #>>(?, ?, 512) , dropout=dropout[1]
 
 #rnn_merged = add([rnn_1f, rnn_1b]) #>>(?, ?, 512)
 
 #TODO TRY THIS FROM: https://github.com/fchollet/keras/issues/2838
 rnn_bidir = concatenate([rnn_1f, rnn_1b])
-dr_rnn_bidir = Dropout(dropout[2])(rnn_bidir)
-y_pred = TimeDistributed(Dense(num_classes, activation='softmax'))(dr_rnn_bidir)
+# dr_rnn_bidir = Dropout(dropout[2])(rnn_bidir)
+y_pred = TimeDistributed(Dense(num_classes, activation='softmax'))(rnn_bidir)
 
 # Layer 5 FC Layer
 #y_pred = Dense(fc_size, name='fc5', activation='relu')(x) #>>(?, 778, 2048)
@@ -497,12 +500,14 @@ print(train_steps, valid_steps)
 
 
 
+# iterate = K.function([input_img, K.learning_phase()], [loss, grads])
 test_func = K.function([input_data],[y_pred])
+
 viz_cb = VizCallback(test_func, validdata.next_val())
 
 model.fit_generator(generator=traindata.next_train(),
-                    steps_per_epoch=train_steps,  # 28
-                    epochs=500,
+                    steps_per_epoch=traindata,  # 28
+                    epochs=100,
                     callbacks=[viz_cb, traindata, validdata],  ##create custom callback to handle stop for valid
 
                     validation_data=validdata.next_val(),
