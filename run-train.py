@@ -29,12 +29,12 @@ import keras
 from keras import backend as K
 from keras.models import Model, Sequential
 from keras.layers.recurrent import SimpleRNN
-from keras.layers import Dense, Activation, Bidirectional, Reshape, Lambda, Input, Dropout
-from keras.layers.recurrent import _time_distributed_dense
+from keras.layers import Dense, Activation, Bidirectional, Reshape, Lambda, Input
+# from keras.layers.recurrent import _time_distributed_dense
 from keras.optimizers import SGD, adam
 from keras.preprocessing.sequence import pad_sequences
 # from keras.utils.data_utils import Sequence
-from keras.layers import TimeDistributed
+from keras.layers import TimeDistributed, Dropout
 from keras.layers.merge import add, concatenate
 import keras.callbacks
 
@@ -179,7 +179,7 @@ print(max_intseq_length)
 
 num_classes = len(char_map)+2 ##need +2 for ctc null char
 
-print(num_classes)
+print("numclasses:",num_classes)
 
 
 global batch_size
@@ -433,7 +433,7 @@ validdata = timitWavSeq(wavpath=sort_valid_wav_list, transcript=sort_valid_trans
 testdata = timitWavSeq(wavpath=sort_test_wav_list, transcript=sort_test_trans_list, finish=sort_test_fin_list)
 
 #todo this is not a ready output
-#testdata.export_test_mfcc()
+testdata.export_test_mfcc()
 
 # Define CTC loss
 def ctc_lambda_func(args):
@@ -489,7 +489,8 @@ rnn_1b = SimpleRNN(rnn_size, return_sequences=True, go_backwards=True,
 #rnn_merged = add([rnn_1f, rnn_1b]) #>>(?, ?, 512)
 
 #TODO TRY THIS FROM: https://github.com/fchollet/keras/issues/2838
-rnn_bidir = concatenate([rnn_1f, rnn_1b])
+# rnn_bidir = concatenate([rnn_1f, rnn_1b]) ### DOESN'T WORK IN COREML FFS
+rnn_bidir = add([rnn_1f, rnn_1b])
 dr_rnn_bidir = Dropout(dropout[2])(rnn_bidir)
 y_pred = TimeDistributed(Dense(num_classes, activation='softmax'))(dr_rnn_bidir)
 
