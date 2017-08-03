@@ -433,7 +433,7 @@ validdata = timitWavSeq(wavpath=sort_valid_wav_list, transcript=sort_valid_trans
 testdata = timitWavSeq(wavpath=sort_test_wav_list, transcript=sort_test_trans_list, finish=sort_test_fin_list)
 
 #todo this is not a ready output
-testdata.export_test_mfcc()
+#testdata.export_test_mfcc()
 
 # Define CTC loss
 def ctc_lambda_func(args):

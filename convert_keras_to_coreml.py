@@ -30,6 +30,7 @@ from keras.preprocessing.sequence import pad_sequences
 
 from keras.layers.merge import add, concatenate
 import keras.callbacks
+from keras.layers import TimeDistributed, Dropout
 
 print(keras.__version__) ##be careful with 2.0.6 as 2.0.4 tested with CoreML
 
@@ -69,6 +70,7 @@ try:
 except Exception as e:
     print(e)
 
+loaded_model.summary()
 
 global batch_size
 batch_size = 1
@@ -78,38 +80,77 @@ fc_size = 2048
 rnn_size = 512
 mfcc_features = 26
 max_mfcclength_audio = 778
+num_classes = 30
+dropout = [0,0,0]
 
 X = np.zeros([batch_size, max_mfcclength_audio, mfcc_features])
+#
+# # Creates a tensor there are always 26 MFCC
+# input_data = Input(name='the_input', shape=X.shape[1:]) # >>(?, 778, 26)
+#
+# # First 3 FC layers
+# x = Dense(fc_size, name='fc1', activation='relu',
+#           weights=loaded_model.layers[1].get_weights())(input_data) # >>(?, 778, 2048)
+# x = Dense(fc_size, name='fc2', activation='relu',
+#          weights=loaded_model.layers[2].get_weights())(x) # >>(?, 778, 2048)
+# x = Dense(fc_size, name='fc3', activation='relu',
+#          weights=loaded_model.layers[3].get_weights())(x) # >>(?, 778, 2048)
+#
+# # Layer 4 BiDirectional RNN
+#
+# rnn_1f = SimpleRNN(rnn_size, return_sequences=True, go_backwards=False,
+#                    kernel_initializer='he_normal', name='rnn_f',
+#                    weights=loaded_model.layers[4].get_weights())(x) #>>(?, ?, 512)
+#
+# rnn_1b = SimpleRNN(rnn_size, return_sequences=True, go_backwards=True,
+#                    kernel_initializer='he_normal', name='rnn_b',
+#                    weights=loaded_model.layers[5].get_weights())(x) #>>(?, ?, 512)
+#
+# rnn_merged = add([rnn_1f, rnn_1b],
+#                 weights=loaded_model.layers[6].get_weights()) #>>(?, ?, 512)
+# x = Activation('relu', name='birelu',
+#               weights=loaded_model.layers[7].get_weights())(rnn_merged) #>>(?, ?, 512)
+#
+# # Layer 5 FC Layer
+# y_pred = Dense(fc_size, name='fc5', activation='relu',
+#               weights=loaded_model.layers[8].get_weights())(x) #>>(?, 778, 2048)
 
-# Creates a tensor there are always 26 MFCC
+for ind,i in enumerate(loaded_model.layers):
+    print(ind,i)
+
 input_data = Input(name='the_input', shape=X.shape[1:]) # >>(?, 778, 26)
+dr_input = Dropout(dropout[0])(input_data)
 
 # First 3 FC layers
 x = Dense(fc_size, name='fc1', activation='relu',
-          weights=loaded_model.layers[1].get_weights())(input_data) # >>(?, 778, 2048)
+        weights = loaded_model.layers[2].get_weights())(dr_input) # >>(?, 778, 2048)
+x = Dropout(dropout[1])(x)
 x = Dense(fc_size, name='fc2', activation='relu',
-         weights=loaded_model.layers[2].get_weights())(x) # >>(?, 778, 2048)
+        weights = loaded_model.layers[4].get_weights())(x) # >>(?, 778, 2048)
+x = Dropout(dropout[1])(x)
 x = Dense(fc_size, name='fc3', activation='relu',
-         weights=loaded_model.layers[3].get_weights())(x) # >>(?, 778, 2048)
+        weights = loaded_model.layers[6].get_weights())(x) # >>(?, 778, 2048)
+x = Dropout(dropout[1])(x)
 
 # Layer 4 BiDirectional RNN
 
 rnn_1f = SimpleRNN(rnn_size, return_sequences=True, go_backwards=False,
                    kernel_initializer='he_normal', name='rnn_f',
-                   weights=loaded_model.layers[4].get_weights())(x) #>>(?, ?, 512)
+        weights = loaded_model.layers[8].get_weights())(x) #>>(?, ?, 512) ,
 
 rnn_1b = SimpleRNN(rnn_size, return_sequences=True, go_backwards=True,
                    kernel_initializer='he_normal', name='rnn_b',
-                   weights=loaded_model.layers[5].get_weights())(x) #>>(?, ?, 512)
+        weights = loaded_model.layers[9].get_weights())(x) #>>(?, ?, 512) ,
 
-rnn_merged = add([rnn_1f, rnn_1b],
-                weights=loaded_model.layers[6].get_weights()) #>>(?, ?, 512)
-x = Activation('relu', name='birelu',
-              weights=loaded_model.layers[7].get_weights())(rnn_merged) #>>(?, ?, 512)
+rnn_bidir = add([rnn_1f, rnn_1b]) #>>(?, ?, 512)
 
-# Layer 5 FC Layer
-y_pred = Dense(fc_size, name='fc5', activation='relu',
-              weights=loaded_model.layers[8].get_weights())(x) #>>(?, 778, 2048)
+#TODO TRY THIS FROM: https://github.com/fchollet/keras/issues/2838
+# rnn_bidir = concatenate([rnn_1f, rnn_1b])  ### DOESN'T WORK IN COREML FFS
+dr_rnn_bidir = Dropout(dropout[2])(rnn_bidir)
+y_pred = TimeDistributed(Dense(num_classes, activation='softmax',
+        weights = loaded_model.layers[12].get_weights()))(dr_rnn_bidir)
+
+
 
 ##############################################
 
@@ -162,4 +203,17 @@ coreml_model.output_description['output1'] = 'Audio transcription'
 
 # SAVE
 coreml_model.save('kds.mlmodel')
+
+for ind,i in enumerate(model3.layers):
+    print(ind,i)
+
+
+##lets also export the trimmed model to test that it works on python
+#
+# # serialize model to JSON
+with open("TRIMMED_ds_ctc_model.json", "w") as json_file:
+     json_file.write(model3.to_json())
+#
+# # serialize weights to HDF5
+model3.save_weights("TRIMMED_ds_ctc_model_weights.h5")
 
