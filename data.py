@@ -18,8 +18,11 @@ def read_text(full_wav):
             t_list = split[2:]
             trans = ""
         # insert cleaned word (lowercase plus removed bad punct)
-        for t in t_list:
-            trans = trans + ' ' + clean(t)
+        for i, w in enumerate(t_list):
+            if(i==0):
+                trans = trans + clean(w)
+            else:
+                trans = trans + ' ' + clean(w)
 
     return start, end, trans
 
@@ -171,6 +174,6 @@ def get_max_intseq(comb):
     return max_intseq_length
 
 def get_number_of_char_classes():
-    ## TODO would be better to infer from dataset (once cleaned)
-    num_classes = len(char_map.char_map)+2 ##need +2 for ctc null char
+    ## TODO would be better to check with dataset (once cleaned)
+    num_classes = len(char_map.char_map)+2 ##need +1 for ctc null char +1 pad
     return num_classes

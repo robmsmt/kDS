@@ -52,14 +52,20 @@ def main(sortagrad, loadcheckpoint, epochs, batchsize):
     else:
         # new model
 
-        model, input_data, y_pred = build_ds1_simple_rnn()
+        model, input_data, y_pred = build_ds1_simple_rnn(fc_size=2048,
+                                                         rnn_size=512,
+                                                         mfcc_features=26,
+                                                         max_mfcclength_audio=778,
+                                                         dropout=[0.2, 0.5, 0.3],
+                                                         num_classes=30)
 
     ## 4. train
     all_steps = len(df_train.index) // batchsize
     train_steps = len(df_train.index) // batchsize
     valid_steps = (len(df_valid.index) // batchsize) // 10
+    queue = 10
 
-    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 4
+    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 2; queue=3
 
     iterate = K.function([input_data, K.learning_phase()], [y_pred])
     test_cb = TestCallback(iterate, validdata.next_batch())
@@ -73,7 +79,9 @@ def main(sortagrad, loadcheckpoint, epochs, batchsize):
                         callbacks=[cp_cb, tb_cb, test_cb, traindata, validdata],  ##create custom callback to handle stop for valid
                         validation_data=validdata.next_batch(),
                         validation_steps=1,
-                        initial_epoch=0)
+                        initial_epoch=0,
+                        max_q_size=queue
+                        )
 
     ## 5. final test - move this to run-test
     model.predict_generator(testdata.next_batch(), 8, workers=1, verbose=1)
@@ -94,7 +102,7 @@ if __name__ == '__main__':
                        help='If true, we sort utterances by their length in the first epoch')
     parser.add_argument('--loadcheckpoint', type=bool, default=False,
                        help='If true, load for the last checkpoint at the default path we find')
-    parser.add_argument('--epochs', type=int, default=20,
+    parser.add_argument('--epochs', type=int, default=50,
                        help='Number of epochs to train the model')
     parser.add_argument('--batchsize', type=int, default=16,
                        help='batch_size used to train the model')

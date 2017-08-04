@@ -10,7 +10,7 @@ import numpy as np
 from keras import backend as K
 from keras.models import Model, Sequential
 from keras.layers.recurrent import SimpleRNN
-from keras.layers import Dense, Activation, Bidirectional, Reshape, Lambda, Input
+from keras.layers import Dense, Activation, Bidirectional, Reshape, Lambda, Input, Masking
 from keras.optimizers import SGD, adam
 from keras.layers import TimeDistributed, Dropout
 from keras.layers.merge import add  # , # concatenate BAD FOR COREML
@@ -36,7 +36,7 @@ def ctc_lambda_func(args):
 
 def build_ds1_simple_rnn(fc_size=2048, rnn_size=512, mfcc_features=26,
                          max_mfcclength_audio=778, dropout=[0.2, 0.5, 0.3],
-                         num_classes=30):
+                         num_classes=29):
     '''
     This function builds a neural network as close to the original DS1 paper
     https://arxiv.org/abs/1412.5567
@@ -46,8 +46,8 @@ def build_ds1_simple_rnn(fc_size=2048, rnn_size=512, mfcc_features=26,
     :param mfcc_features: Number of MFCC features used
     :param max_mfcclenth_audio: Number of
     :param dropout: Uses Dropout values on initial / mid / end
-    :param num_classes: Number of output classes (characters to predict, requires 26alpha + "'" + space + 2xCTC)
-    :return: model
+    :param num_classes: Number of output classes (characters to predict, requires 26alpha + apost + space + CTC)
+    :return: model, input_data, y_pred (input_data, y_pred used for callbacks)
     '''
     K.set_learning_phase(1)
 
@@ -55,7 +55,8 @@ def build_ds1_simple_rnn(fc_size=2048, rnn_size=512, mfcc_features=26,
     X = np.zeros([16, max_mfcclength_audio, mfcc_features])
 
     input_data = Input(name='the_input', shape=X.shape[1:])  # >>(?, 778, 26)
-    dr_input = Dropout(dropout[0])(input_data)
+    in_mask = Masking(name='in_mask', mask_value=0)(input_data)
+    dr_input = Dropout(dropout[0])(in_mask)
 
     # First 3 FC layers
     x = Dense(fc_size, name='fc1', activation='relu')(dr_input)  # >>(?, 778, 2048)

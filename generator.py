@@ -16,9 +16,10 @@ from utils import decode_batch, text_to_int_sequence
 
 def get_intseq(trans,max_intseq_length=80):
     # PAD
-    while (len(trans) < max_intseq_length):
-        trans = trans + ' '  # replace with a space char to pad
     t = text_to_int_sequence(trans)
+    while (len(t) < max_intseq_length):
+        t.append(0)  # replace with a space char to pad
+    # print(t)
     return t
 
 def get_mfcc(filename):
@@ -34,6 +35,7 @@ def get_xsize(val):
 
 def get_ylen(val):
     return len(val)
+
 
 
 class BaseGenerator(callbacks.Callback):
@@ -53,6 +55,10 @@ class BaseGenerator(callbacks.Callback):
         self.feats_std = 0
         self.feats_mean = 0
 
+        self.set_of_all_int_outputs_used = None
+
+    def normalise(self, feature, eps=1e-14):
+        return (feature - self.feats_mean) / (self.feats_std + eps)
 
     def get_batch(self, idx):
 
@@ -70,6 +76,12 @@ class BaseGenerator(callbacks.Callback):
         # 1. X_data (the MFCC's for the batch)
         X_data = np.array([get_mfcc(file_name) for file_name in batch_x])
         assert (X_data.shape == (self.batch_size, 778, 26))
+
+        # TODO batch-normalisation - later as will affect training
+        # features = [self.featurize(a) for a in batch_x]
+        # for i in range(self.batch_size):
+        #     feat = features[i]
+        #     feat = self.normalize(feat)
 
         # 2. labels (made numerical)
         labels = np.array([get_intseq(l, self.max_intseq_length) for l in batch_y_trans])
@@ -182,7 +194,10 @@ class TestCallback(callbacks.Callback):
         #num_proc = batch_size #min of batchsize OR num_left
         ## todo make run-test from this
 
-        decoded_res = decode_batch(self.test_func, word_batch['the_input'][0:self.batch_size])
+        decoded_res = decode_batch(self.test_func,
+                                   word_batch['the_input'][0:self.batch_size],
+                                   word_batch['source_str'][0:self.batch_size],
+                                   self.batch_size)
 
         for j in range(0, self.batch_size):
             edit_dist = editdistance.eval(decoded_res[j], word_batch['source_str'][j])
