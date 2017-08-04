@@ -63,9 +63,8 @@ def main(sortagrad, loadcheckpoint, epochs, batchsize):
     all_steps = len(df_train.index) // batchsize
     train_steps = len(df_train.index) // batchsize
     valid_steps = (len(df_valid.index) // batchsize) // 10
-    queue = 10
 
-    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 2; queue=3
+    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 2
 
     iterate = K.function([input_data, K.learning_phase()], [y_pred])
     test_cb = TestCallback(iterate, validdata.next_batch())
@@ -79,8 +78,7 @@ def main(sortagrad, loadcheckpoint, epochs, batchsize):
                         callbacks=[cp_cb, tb_cb, test_cb, traindata, validdata],  ##create custom callback to handle stop for valid
                         validation_data=validdata.next_batch(),
                         validation_steps=1,
-                        initial_epoch=0,
-                        max_q_size=queue
+                        initial_epoch=0
                         )
 
     ## 5. final test - move this to run-test
