@@ -177,11 +177,11 @@ class BaseGenerator(callbacks.Callback):
 
 
 class TestCallback(callbacks.Callback):
-    def __init__(self, test_func, validdata, batch_size=16):
+    def __init__(self, test_func, validdata):
         self.test_func = test_func
-        self.batch_size = batch_size
         self.validdata = validdata
         self.validdata_next_val = self.validdata.next_batch()
+        self.batch_size = validdata.batch_size
 
         self.val_best_mean_ed = 0
         self.val_best_norm_mean_ed = 0
@@ -193,11 +193,14 @@ class TestCallback(callbacks.Callback):
     def validate_epoch_end(self):
         mean_norm_ed = 0.0
         mean_ed = 0.0
-        self.validdata.cur_index = 1  # reset index
+        self.validdata.cur_index = 0  # reset index
+
+        chunks = len(self.validdata.wavpath) // self.validdata.batch_size
 
         #call next batch until all data
 
-        while(self.validdata.cur_index != 0):
+        for c in range(0, chunks):
+
             print(self.validdata.cur_index)
             word_batch = next(self.validdata_next_val)[0]
             #num_proc = batch_size #min of batchsize OR num_left
