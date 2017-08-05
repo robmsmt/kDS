@@ -33,22 +33,33 @@ def main(sortagrad, loadcheckpoint, epochs, batchsize):
     '''
 
     ## 1. get path and data
-    path = get_data_path()
+    path = get_timit_data_path()
     dataproperties, df_all, df_train, df_valid, df_test = get_all_wavs_in_path(path, sortagrad=sortagrad)
+
+    #merge
+    frames = [df_valid, df_test]
+    df_supertest = pd.concat(frames)
 
     ## 2. init data generators
     alldata = BaseGenerator(dataframe=df_all, dataproperties=dataproperties, batch_size=batchsize)
     traindata = BaseGenerator(dataframe=df_train, dataproperties=dataproperties, batch_size=batchsize)
-    validdata = BaseGenerator(dataframe=df_valid, dataproperties=dataproperties, batch_size=batchsize)
-    testdata = BaseGenerator(dataframe=df_test, dataproperties=dataproperties, batch_size=batchsize)
+    validdata = BaseGenerator(dataframe=df_supertest, dataproperties=dataproperties, batch_size=batchsize)
+    # testdata = BaseGenerator(dataframe=df_test, dataproperties=dataproperties, batch_size=batchsize)
 
 
     ## 3. Load existing or create new model
     if loadcheckpoint:
         # load existing
 
-        _, input_data, y_pred = build_ds1_simple_rnn()  # required for callback todo test
+        _, input_data, y_pred = build_ds1_simple_rnn(fc_size=2048,
+                                                         rnn_size=512,
+                                                         mfcc_features=26,
+                                                         max_mfcclength_audio=778,
+                                                         dropout=[0.2, 0.5, 0.3],
+                                                         num_classes=30,
+                                                         train_mode=1)  # required for callback todo test
         model = load_model_checkpoint()
+
     else:
         # new model
 
@@ -57,17 +68,27 @@ def main(sortagrad, loadcheckpoint, epochs, batchsize):
                                                          mfcc_features=26,
                                                          max_mfcclength_audio=778,
                                                          dropout=[0.2, 0.5, 0.3],
-                                                         num_classes=30)
+                                                         num_classes=30,
+                                                         train_mode=1)
+
+        # testmodel, test_input_data, test_y_pred = build_ds1_simple_rnn(fc_size=2048,
+        #                                                  rnn_size=512,
+        #                                                  mfcc_features=26,
+        #                                                  max_mfcclength_audio=778,
+        #                                                  dropout=[0.0, 0.0, 0.0],
+        #                                                  num_classes=30,
+        #                                                  train_mode=0)
 
     ## 4. train
     all_steps = len(df_train.index) // batchsize
     train_steps = len(df_train.index) // batchsize
-    valid_steps = (len(df_valid.index) // batchsize) // 10
+    valid_steps = (len(df_valid.index) // batchsize)
 
-    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 2
+    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 2; valid_steps=2
 
+    # iterate = K.function([test_input_data, K.learning_phase()], [test_y_pred])
     iterate = K.function([input_data, K.learning_phase()], [y_pred])
-    test_cb = TestCallback(iterate, validdata.next_batch())
+    test_cb = TestCallback(iterate, validdata)
 
     cp_cb = ModelCheckpoint(filepath='./checkpoints/epoch_checkpoint.hdf5', verbose=1, save_best_only=False)
     tb_cb = TensorBoard(log_dir='./tensorboard/', histogram_freq=1, write_graph=True, write_images=True)
@@ -77,12 +98,12 @@ def main(sortagrad, loadcheckpoint, epochs, batchsize):
                         epochs=epochs,
                         callbacks=[cp_cb, tb_cb, test_cb, traindata, validdata],  ##create custom callback to handle stop for valid
                         validation_data=validdata.next_batch(),
-                        validation_steps=1,
+                        validation_steps=valid_steps,
                         initial_epoch=0
                         )
 
     ## 5. final test - move this to run-test
-    model.predict_generator(testdata.next_batch(), 8, workers=1, verbose=1)
+    # model.predict_generator(testdata.next_batch(), 8, workers=1, verbose=1)
 
     ## save final version of model
     save_model(model, name="./checkpoints/ds_ctc_FIN")

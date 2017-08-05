@@ -34,9 +34,10 @@ def ctc_lambda_func(args):
     return K.ctc_batch_cost(labels, y_pred, input_length, label_length)
 
 
+
 def build_ds1_simple_rnn(fc_size=2048, rnn_size=512, mfcc_features=26,
                          max_mfcclength_audio=778, dropout=[0.2, 0.5, 0.3],
-                         num_classes=29):
+                         num_classes=29, train_mode=1):
     '''
     This function builds a neural network as close to the original DS1 paper
     https://arxiv.org/abs/1412.5567
@@ -49,14 +50,14 @@ def build_ds1_simple_rnn(fc_size=2048, rnn_size=512, mfcc_features=26,
     :param num_classes: Number of output classes (characters to predict, requires 26alpha + apost + space + CTC)
     :return: model, input_data, y_pred (input_data, y_pred used for callbacks)
     '''
-    K.set_learning_phase(1)
+    K.set_learning_phase(train_mode)
 
     # Creates a tensor there are always 26 MFCC
     X = np.zeros([16, max_mfcclength_audio, mfcc_features])
 
     input_data = Input(name='the_input', shape=X.shape[1:])  # >>(?, 778, 26)
-    in_mask = Masking(name='in_mask', mask_value=0)(input_data)
-    dr_input = Dropout(dropout[0])(in_mask)
+    # in_mask = Masking(name='in_mask', mask_value=0)(input_data)
+    dr_input = Dropout(dropout[0])(input_data)
 
     # First 3 FC layers
     x = Dense(fc_size, name='fc1', activation='relu')(dr_input)  # >>(?, 778, 2048)
@@ -93,7 +94,7 @@ def build_ds1_simple_rnn(fc_size=2048, rnn_size=512, mfcc_features=26,
                                                                        input_length,
                                                                        label_length])
 
-    sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=5)
+    sgd = SGD(lr=0.02, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=5)
     model = Model(inputs=[input_data, labels, input_length, label_length], outputs=loss_out)
 
     # dummy lambda func for the loss
@@ -101,3 +102,77 @@ def build_ds1_simple_rnn(fc_size=2048, rnn_size=512, mfcc_features=26,
     print(model.summary(line_length=80))
 
     return model, input_data, y_pred
+
+
+def build_ds1_simple_rnn_no_ctc_and_xfer_weights(loaded_model, fc_size=2048, rnn_size=512, mfcc_features=26,
+                         max_mfcclength_audio=778, dropout=[0, 0, 0],
+                         num_classes=29):
+    '''
+    This function builds a neural network as close to the original DS1 paper
+    https://arxiv.org/abs/1412.5567
+
+    :param fc_size: The fully connected layer size.
+    :param rnn_size: The BIRNN layer size
+    :param mfcc_features: Number of MFCC features used
+    :param max_mfcclenth_audio: Number of
+    :param dropout: Uses Dropout values on initial / mid / end
+    :param num_classes: Number of output classes (characters to predict, requires 26alpha + apost + space + CTC)
+    :return: model, input_data, y_pred (input_data, y_pred used for callbacks)
+    '''
+    K.set_learning_phase(0)
+
+    for ind, i in enumerate(loaded_model.layers):
+        print(ind, i)
+
+    # Creates a tensor there are always 26 MFCC
+    X = np.zeros([16, max_mfcclength_audio, mfcc_features])
+
+    input_data = Input(name='the_input', shape=X.shape[1:])  # >>(?, 778, 26)
+    # in_mask = Masking(name='in_mask', mask_value=0)(input_data) ## DOESN'T WORK IN COREML FFS
+    dr_input = Dropout(dropout[0])(input_data)
+
+    # First 3 FC layers
+    x = Dense(fc_size, name='fc1', activation='relu',
+        weights = loaded_model.layers[3].get_weights())(dr_input)  # >>(?, 778, 2048)
+    x = Dropout(dropout[1])(x)
+    x = Dense(fc_size, name='fc2', activation='relu',
+        weights = loaded_model.layers[5].get_weights())(x)  # >>(?, 778, 2048)
+    x = Dropout(dropout[1])(x)
+    x = Dense(fc_size, name='fc3', activation='relu',
+        weights = loaded_model.layers[7].get_weights())(x)  # >>(?, 778, 2048)
+    x = Dropout(dropout[1])(x)
+
+    # Layer 4 BiDirectional RNN
+
+    rnn_1f = SimpleRNN(rnn_size, return_sequences=True, go_backwards=False,
+                       kernel_initializer='he_normal', name='rnn_f',
+        weights = loaded_model.layers[9].get_weights())(x)  # >>(?, ?, 512) ,
+
+    rnn_1b = SimpleRNN(rnn_size, return_sequences=True, go_backwards=True,
+                       kernel_initializer='he_normal', name='rnn_b',
+        weights = loaded_model.layers[10].get_weights())(x)  # >>(?, ?, 512) ,
+
+    # rnn_bidir = concatenate([rnn_1f, rnn_1b]) ### CONCAT DOESN'T WORK IN COREML FFS
+    rnn_bidir = add([rnn_1f, rnn_1b])
+    dr_rnn_bidir = Dropout(dropout[2])(rnn_bidir)
+
+    # Layer 5+6 Time Dist Layer & Softmax
+    y_pred = TimeDistributed(Dense(num_classes, name="y_pred", activation="softmax",
+        weights = loaded_model.layers[13].get_weights()))(dr_rnn_bidir)
+
+    # Change shape
+    # labels = Input(name='the_labels', shape=[80], dtype='float32')
+    # input_length = Input(name='input_length', shape=[1], dtype='int64')
+    # label_length = Input(name='label_length', shape=[1], dtype='int64')
+    # model = Model(inputs=[input_data, labels, input_length, label_length], outputs=loss_out)
+    # model.compile(loss={'ctc': lambda y_true, y_pred: y_pred}, optimizer=sgd)
+
+    sgd = SGD(lr=0.02, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=5)
+    model = Model(inputs=input_data, outputs=y_pred)
+
+    model.compile(loss='mean_squared_error', optimizer=sgd)  ## try MSE
+
+    print(model.summary(line_length=80))
+
+    return model, input_data, y_pred
+

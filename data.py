@@ -146,6 +146,27 @@ def get_all_wavs_in_path(target, sortagrad=True):
 
     return dataproperties, df_all, df_train, df_valid, df_test
 
+
+
+def get_data_from_pandas_files(target, sortagrad=True):
+    '''Different approach to loading in data. Assume that pandas frame already exists with data in form
+        path, size, transcript
+        this is best approach for loading in moz deepspeech processed files.
+    '''
+
+    ## read in file
+
+    ## sortagrad
+
+    ## run checks (might need to adjust nn or drop any too large)
+
+    pass
+    return
+
+
+
+
+
 ##DATA CHECKS RUN ALL OF THESE
 
 def get_words(comb):

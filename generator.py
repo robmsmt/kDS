@@ -177,10 +177,14 @@ class BaseGenerator(callbacks.Callback):
 
 
 class TestCallback(callbacks.Callback):
-    def __init__(self, test_func, validdata_next_val, batch_size=16):
+    def __init__(self, test_func, validdata, batch_size=16):
         self.test_func = test_func
         self.batch_size = batch_size
-        self.validdata_next_val = validdata_next_val
+        self.validdata = validdata
+        self.validdata_next_val = self.validdata.next_batch()
+
+        self.val_best_mean_ed = 0
+        self.val_best_norm_mean_ed = 0
 
     def wer(self):
         #todo
@@ -189,27 +193,35 @@ class TestCallback(callbacks.Callback):
     def validate_epoch_end(self):
         mean_norm_ed = 0.0
         mean_ed = 0.0
+        self.validdata.cur_index = 1  # reset index
 
-        word_batch = next(self.validdata_next_val)[0]
-        #num_proc = batch_size #min of batchsize OR num_left
-        ## todo make run-test from this
+        #call next batch until all data
 
-        decoded_res = decode_batch(self.test_func,
-                                   word_batch['the_input'][0:self.batch_size],
-                                   word_batch['source_str'][0:self.batch_size],
-                                   self.batch_size)
+        while(self.validdata.cur_index != 0):
+            print(self.validdata.cur_index)
+            word_batch = next(self.validdata_next_val)[0]
+            #num_proc = batch_size #min of batchsize OR num_left
 
-        for j in range(0, self.batch_size):
-            edit_dist = editdistance.eval(decoded_res[j], word_batch['source_str'][j])
-            mean_ed += float(edit_dist)
-            mean_norm_ed += float(edit_dist) / len(word_batch['source_str'][j])
-            print("\n{}.Truth:{}\n{}.Trans:{}".format(str(j), word_batch['source_str'][j], str(j), decoded_res[j]))
+            decoded_res = decode_batch(self.test_func,
+                                       word_batch['the_input'][0:self.batch_size],
+                                       word_batch['source_str'][0:self.batch_size],
+                                       self.batch_size)
 
-        mean_norm_ed = mean_norm_ed
-        mean_ed = mean_ed
+            #todo LM can go here
+            #todo WER more used metric
 
-        print('\nOut of %d batch samples:  Mean edit distance: %.3f Mean normalized edit distance: %0.3f'
-              % (1, mean_ed, mean_norm_ed))
+            for j in range(0, self.batch_size):
+                edit_dist = editdistance.eval(decoded_res[j], word_batch['source_str'][j]) ## todo test edit distance with strings
+                mean_ed += float(edit_dist)
+                mean_norm_ed += float(edit_dist) / len(word_batch['source_str'][j])
+                if(j % 8 == 0):
+                    print("\n{}.Truth:{}\n{}.Trans:{}".format(str(j), word_batch['source_str'][j], str(j), decoded_res[j]))
+
+            mean_norm_ed = mean_norm_ed
+            mean_ed = mean_ed
+
+            print('\nOut of %d batch samples:  Mean edit distance: %.3f Mean normalized edit distance: %0.3f'
+                  % (1, mean_ed, mean_norm_ed))
 
 
     def on_epoch_end(self, epoch, logs=None):

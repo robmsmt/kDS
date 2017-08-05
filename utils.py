@@ -70,7 +70,6 @@ def decode_batch(test_func, word_batch, source_str, batch_size):
     #                                       batch_y))
     # print(ler)
 
-
     for j in range(batch_size): # 0:batch_size
         out_best1 = list(np.argmax(output[j, :], axis=1))
         out_star = [k for k, g in itertools.groupby(out_best1)]
@@ -91,6 +90,23 @@ def decode_batch(test_func, word_batch, source_str, batch_size):
     # print(corrected)
 
     return ret
+
+def test_decode(prediction, batch_size=1):
+    ret = []
+    for j in range(batch_size):  # 0:batch_size
+        out_best1 = list(np.argmax(prediction[j, :], axis=1))
+        out_star = [k for k, g in itertools.groupby(out_best1)]
+        try:
+            outStr = int_to_text_sequence(out_star)
+        except Exception as e:
+            print("error:", e)
+            outStr = "DECODE ERROR:"+str(out_star)
+            raise("DECODE ERROR2")
+
+        ret.append(''.join(outStr))
+
+    return ret
+
 
 
 
@@ -125,8 +141,7 @@ def load_model_checkpoint(path="./checkpoints/ds_ctc_model", summary=True):
 
     return loaded_model
 
-def get_data_path():
-    ##TODO - make this work for all datasets
+def get_timit_data_path():
     ## Use hostname to detect my laptop OR else it's cluster
     hostname = socket.gethostname().lower()
     if hostname in ('rs-e5550').lower():
@@ -134,6 +149,16 @@ def get_data_path():
     else:
         datapath = "/cluster/project2/darkspeech/rob/DeepSpeech/data/timit/"
     target = datapath + "TIMIT/"
+    return target
+
+def get_librispeech_data_path():
+    ## Use hostname to detect my laptop OR else it's cluster
+    hostname = socket.gethostname().lower()
+    if hostname in ('rs-e5550').lower():
+        datapath = "/home/rob/Dropbox/UCL/DIS/Admin/LibriSpeech/"
+    else:
+        datapath = "/cluster/project2/darkspeech/rob/DeepSpeech/data/LibriSpeech/"
+    target = datapath + ""
     return target
 
 #>>> from utils import int_to_text_sequence
