@@ -22,34 +22,49 @@ from model import *
 
 # from keras import backend as K
 from keras.callbacks import ModelCheckpoint, TensorBoard
+import keras
 
 #######################################################
 
 
 
-def main(sortagrad, loadcheckpoint, epochs, batchsize):
+def main(sortagrad, loadcheckpoint, epochs, batchsize, tensorboard):
     '''
     There are 5 simple steps to this program
     '''
 
     ## 1. get path and data
-    path = get_timit_data_path()
-    dataproperties, df_all, df_train, df_valid, df_test = get_all_wavs_in_path(path, sortagrad=sortagrad)
+    timit_path = get_timit_data_path()
+    dataproperties, df_all, df_train, df_valid, df_test = get_all_wavs_in_path(timit_path, sortagrad=sortagrad)
 
     #merge
     frames = [df_valid, df_test]
     df_supertest = pd.concat(frames)
 
+
+    ## 1b. load in Librispeech
+    libri_path = get_librispeech_data_path()
+
+    lib_filelist = ["librivox-dev-clean.csv,", "librivox-dev-other.csv,",
+                "librivox-train-clean-100.csv,","librivox-train-clean-360.csv,", "librivox-train-other-500.csv,",
+                "librivox-test-clean.csv,","librivox-test-other.csv"]
+
+    # timit_filelist = ["df_all.csv"]
+
+    csvs = ""
+    for f in lib_filelist:
+        csvs = csvs + libri_path + f
+
+    dataproperties, df_lib_all = check_all_wavs_and_trans_from_csvs(csvs, df_train)
+
     ## 2. init data generators
-    alldata = BaseGenerator(dataframe=df_all, dataproperties=dataproperties, batch_size=batchsize)
-    traindata = BaseGenerator(dataframe=df_train, dataproperties=dataproperties, batch_size=batchsize)
+    traindata = BaseGenerator(dataframe=df_lib_all, dataproperties=dataproperties, batch_size=batchsize)
     validdata = BaseGenerator(dataframe=df_supertest, dataproperties=dataproperties, batch_size=batchsize)
-    # testdata = BaseGenerator(dataframe=df_test, dataproperties=dataproperties, batch_size=batchsize)
 
 
     ## 3. Load existing or create new model
     if loadcheckpoint:
-        # load existing
+        # load existing -todo test this
 
         _, input_data, y_pred = build_ds1_simple_rnn(fc_size=2048,
                                                          rnn_size=512,
@@ -63,13 +78,17 @@ def main(sortagrad, loadcheckpoint, epochs, batchsize):
     else:
         # new model
 
-        model, input_data, y_pred = build_ds1_simple_rnn(fc_size=2048,
-                                                         rnn_size=512,
-                                                         mfcc_features=26,
-                                                         max_mfcclength_audio=778,
-                                                         dropout=[0.2, 0.5, 0.3],
-                                                         num_classes=30,
-                                                         train_mode=1)
+        # model, input_data, y_pred = build_ds1_simple_rnn(fc_size=2048,
+        #                                                  rnn_size=512,
+        #                                                  mfcc_features=26,
+        #                                                  max_mfcclength_audio=778,
+        #                                                  dropout=[0.2, 0.5, 0.3],
+        #                                                  num_classes=30,
+        #                                                  train_mode=1)
+
+        model, input_data, y_pred = ds2_gru_model(input_dim=26, output_dim=30,nodes=1024, conv_context=11,
+                                                  conv_border_mode='valid', conv_stride=2,
+                                                  initialization='glorot_uniform', batch_norm=False)
 
         # testmodel, test_input_data, test_y_pred = build_ds1_simple_rnn(fc_size=2048,
         #                                                  rnn_size=512,
@@ -80,18 +99,21 @@ def main(sortagrad, loadcheckpoint, epochs, batchsize):
         #                                                  train_mode=0)
 
     ## 4. train
-    all_steps = len(df_train.index) // batchsize
-    train_steps = len(df_train.index) // batchsize
-    valid_steps = (len(df_valid.index) // batchsize)
+    train_steps = len(df_lib_all.index) // batchsize
+    valid_steps = (len(df_supertest.index) // batchsize)
 
-    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 2; valid_steps=2
+    ## Laptop testmode
+    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 2; valid_steps=2; tensorboard=False
 
-    # iterate = K.function([test_input_data, K.learning_phase()], [test_y_pred])
+
     iterate = K.function([input_data, K.learning_phase()], [y_pred])
     test_cb = TestCallback(iterate, validdata)
 
     cp_cb = ModelCheckpoint(filepath='./checkpoints/epoch_checkpoint.hdf5', verbose=1, save_best_only=False)
-    tb_cb = TensorBoard(log_dir='./tensorboard/', histogram_freq=1, write_graph=True, write_images=True)
+    tb_cb = BlankCallback()
+
+    if tensorboard:
+        tb_cb = TensorBoard(log_dir='./tensorboard/', histogram_freq=1, write_graph=True, write_images=True)
 
     model.fit_generator(generator=traindata.next_batch(),
                         steps_per_epoch=train_steps,
@@ -121,16 +143,18 @@ if __name__ == '__main__':
                        help='If true, we sort utterances by their length in the first epoch')
     parser.add_argument('--loadcheckpoint', type=bool, default=False,
                        help='If true, load for the last checkpoint at the default path we find')
-    parser.add_argument('--epochs', type=int, default=50,
+    parser.add_argument('--epochs', type=int, default=10,
                        help='Number of epochs to train the model')
     parser.add_argument('--batchsize', type=int, default=16,
+                       help='batch_size used to train the model')
+    parser.add_argument('--tensorboard', type=bool, default=True,
                        help='batch_size used to train the model')
 
     args = parser.parse_args()
 
     assert(keras.__version__ == "2.0.4") ## CoreML is super strict
 
-    main(args.sortagrad, args.loadcheckpoint, args.epochs, args.batchsize)
+    main(args.sortagrad, args.loadcheckpoint, args.epochs, args.batchsize, args.tensorboard)
 
 
 ###

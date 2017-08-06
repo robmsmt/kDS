@@ -85,31 +85,33 @@ def get_all_wavs_in_path(target, sortagrad=True):
 
             file_count = file_count + 1
 
-    a = {'wavs': train_list_wavs,
-         'fin': train_list_fin,
-         'trans': train_list_trans}
 
-    b = {'wavs': valid_list_wavs,
-         'fin': valid_list_fin,
-         'trans': valid_list_trans}
+    a = {'wav_filename': train_list_wavs,
+         'wav_filesize': train_list_fin,
+         'transcript': train_list_trans}
 
-    c = {'wavs': test_list_wavs,
-         'fin': test_list_fin,
-         'trans': test_list_trans}
+    b = {'wav_filename': valid_list_wavs,
+         'wav_filesize': valid_list_fin,
+         'transcript': valid_list_trans}
 
-    al = {'wavs': train_list_wavs+valid_list_wavs+test_list_wavs,
-         'fin': train_list_fin+valid_list_fin+test_list_fin,
-         'trans': train_list_trans+valid_list_trans+test_list_trans}
+    c = {'wav_filename': test_list_wavs,
+         'wav_filesize': test_list_fin,
+         'transcript': test_list_trans}
 
-    df_all = pd.DataFrame(al, columns=['fin', 'trans', 'wavs'], dtype=int)
-    df_train = pd.DataFrame(a, columns=['fin', 'trans', 'wavs'], dtype=int)
-    df_valid = pd.DataFrame(b, columns=['fin', 'trans', 'wavs'], dtype=int)
-    df_test = pd.DataFrame(c, columns=['fin', 'trans', 'wavs'], dtype=int)
+    al = {'wav_filename': train_list_wavs+valid_list_wavs+test_list_wavs,
+         'wav_filesize': train_list_fin+valid_list_fin+test_list_fin,
+         'transcript': train_list_trans+valid_list_trans+test_list_trans}
+
+
+    df_all = pd.DataFrame(al, columns=['wav_filename', 'wav_filesize', 'transcript'], dtype=int)
+    df_train = pd.DataFrame(a, columns=['wav_filename', 'wav_filesize', 'transcript'], dtype=int)
+    df_valid = pd.DataFrame(b, columns=['wav_filename', 'wav_filesize', 'transcript'], dtype=int)
+    df_test = pd.DataFrame(c, columns=['wav_filename', 'wav_filesize', 'transcript'], dtype=int)
 
     # if sortagrad is enabled sort the data for the first epoch (training only)
     if sortagrad:
-        df_all = df_all.sort_values(by='fin', ascending=True)
-        df_train = df_train.sort_values(by='fin', ascending=True)
+        df_all = df_all.sort_values(by='wav_filesize', ascending=True)
+        df_train = df_train.sort_values(by='wav_filesize', ascending=True)
 
 
     comb = train_list_trans + test_list_trans + valid_list_trans
@@ -165,6 +167,69 @@ def get_all_wavs_in_path(target, sortagrad=True):
 
     return dataproperties, df_all, df_train, df_valid, df_test
 
+
+
+
+def check_all_wavs_and_trans_from_csvs(csvs, timit, sortagrad=True):
+
+    #passed in df_frame
+    df_all = timit
+
+    for csv in csvs.split(','):
+        print("Reading csv:",csv)
+        df_new = pd.read_csv(csv, sep=',')
+        df_all = df_all.append(df_new)
+
+    print("Finished reading in data")
+
+    # df_all['transcript'].to_csv("./lm/df_all_libri_timit_word_list.csv", sep=',', header=False, index=False)  # reorder + out
+
+    listcomb = df_all['transcript'].tolist()
+    print("Total number of files:", len(listcomb))
+
+    comb = []
+
+    for t in listcomb:
+        comb.append(' '.join(t.split()))
+
+    # print("Train/Test/Valid:",len(train_list_wavs), len(test_list_wavs), len(valid_list_wavs))
+    # 6300 TIMIT
+    # (4620, 840, 840) TIMIT
+
+    ##todo put in a remove words or phrases over a certain threshold (either time or label based)
+
+    ## SIZE CHECKS
+    max_intseq_length = get_max_intseq(comb)
+    num_classes = get_number_of_char_classes()
+
+    print("max_intseq_length:", max_intseq_length)
+    print("numclasses:", num_classes)
+
+    # VOCAB CHECKS
+    all_words, max_trans_charlength = get_words(comb)
+    print("max_trans_charlength:", max_trans_charlength)
+    # ('max_trans_charlength:', 80)
+
+    ## TODO could readd the mfcc checks for safety
+    # ('max_mfcc_len:', 778, 'at comb index:', 541)
+
+    all_vocab = set(all_words)
+    print("Words:", len(all_words))
+    print("Vocab:", len(all_vocab))
+
+    dataproperties = {
+        'target': "timit+librispeech",
+        'num_classes': num_classes,
+        'all_words': all_words,
+        'all_vocab': all_vocab,
+        'max_trans_charlength': max_trans_charlength,
+        'max_intseq_length': max_intseq_length
+    }
+
+    if sortagrad:
+        df_all = df_all.sort_values(by='wav_filesize', ascending=True)
+
+    return dataproperties, df_all
 
 
 def get_data_from_pandas_files(target, sortagrad=True):

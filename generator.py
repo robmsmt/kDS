@@ -1,4 +1,4 @@
-import keras.callbacks
+
 import numpy as np
 import pandas as pd
 from sklearn.utils import shuffle
@@ -12,12 +12,18 @@ from heapq import heapify
 
 from keras.preprocessing.sequence import pad_sequences
 from keras import callbacks
+from numpy.lib.stride_tricks import as_strided
 
 from utils import decode_batch, text_to_int_sequence
 
+import soundfile
 
+def get_maxseq_len(trans):
+    # PAD
+    t = text_to_int_sequence(trans)
+    return len(t)
 
-def get_intseq(trans,max_intseq_length=80):
+def get_intseq(trans, max_intseq_length=80):
     # PAD
     t = text_to_int_sequence(trans)
     while (len(t) < max_intseq_length):
@@ -25,29 +31,31 @@ def get_intseq(trans,max_intseq_length=80):
     # print(t)
     return t
 
-def get_mfcc(filename):
+def get_max_time(filename):
+    fs, audio = wav.read(filename)
+    r = p.mfcc(audio, samplerate=fs, numcep=26)  # 2D array -> timesamples x mfcc_features
+    return r.shape[0]  #
+
+
+def make_mfcc_shape(filename,padlen=778):
     fs, audio = wav.read(filename)
     r = p.mfcc(audio, samplerate=fs, numcep=26)  # 2D array -> timesamples x mfcc_features
     t = np.transpose(r)  # 2D array ->  mfcc_features x timesamples
-    X = pad_sequences(t, maxlen=778, dtype='float', padding='post', truncating='post').T
+    X = pad_sequences(t, maxlen=padlen, dtype='float', padding='post', truncating='post').T
     return X  # 2D array -> MAXtimesamples x mfcc_features {778 x 26}
 
 def get_xsize(val):
     return val.shape[0]
 
 
-def get_ylen(val):
-    return len(val)
-
-
-
 class BaseGenerator(callbacks.Callback):
     def __init__(self, dataframe, dataproperties, batch_size=16, max_intseq_length=80):
         self.df = dataframe
         self.dataproperties = dataproperties
-        self.wavpath = self.df['wavs'].tolist()
-        self.transcript = self.df['trans'].tolist()
-        self.finish = self.df['fin'].tolist()
+        #['wav_filesize','transcript','wav_filename']
+        self.wavpath = self.df['wav_filename'].tolist()
+        self.transcript = self.df['transcript'].tolist()
+        self.finish = self.df['wav_filesize'].tolist()
         self.start = np.zeros(len(self.finish))
         self.length = self.finish
 
@@ -59,6 +67,7 @@ class BaseGenerator(callbacks.Callback):
         self.feats_mean = 0
 
         self.set_of_all_int_outputs_used = None
+
 
     def normalise(self, feature, eps=1e-14):
         return (feature - self.feats_mean) / (self.feats_std + eps)
@@ -76,27 +85,79 @@ class BaseGenerator(callbacks.Callback):
             print(batch_x)
             print(batch_y_trans)
 
-        # 1. X_data (the MFCC's for the batch)
-        X_data = np.array([get_mfcc(file_name) for file_name in batch_x])
-        assert (X_data.shape == (self.batch_size, 778, 26))
+        # 0. get the maximum time length of the batch
+        x_val = [get_max_time(file_name) for file_name in batch_x]
+        max_val = max(x_val)
+        # print("Max batch time value is:", max_val)
 
-        # TODO batch-normalisation - later as will affect training
-        # features = [self.featurize(a) for a in batch_x]
+        # 1. X_data (the MFCC's for the batch)
+        X_data = np.array([make_mfcc_shape(file_name, padlen=max_val) for file_name in batch_x])
+        assert (X_data.shape == (self.batch_size, max_val, 26))
+        # print("1. X_data shape:", X_data.shape)
+        # print("1. X_data:", X_data)
+
+        # features = [featurise(a) for a in batch_x]
+        # input_lengths = [f.shape[0] for f in features]
+        # max_length = max(input_lengths)
+        # feature_dim = features[0].shape[1]
+        # # mb_size = len(features)
+        #
+        # # Pad all the inputs so that they are all the same length
+        # x = np.zeros((self.batch_size, max_length, feature_dim))
+        # y = []
+        # label_lengths = []
         # for i in range(self.batch_size):
-        #     feat = features[i]
-        #     feat = self.normalize(feat)
+        #     # feat = features[i]
+        #     # feat = self.normalize(feat)  # Center using means and std
+        #     # x[i, :feat.shape[0], :] = feat
+        #     label = text_to_int_sequence(batch_y_trans[i])
+        #     y.append(label)
+        #     label_lengths.append(len(label))
+        # Flatten labels to comply with warp-CTC signature
+        # y = reduce(lambda i, j: i + j, y)
+        # return {
+        #     'x': x,  # (0-padded features of shape(mb_size,timesteps,feat_dim)
+        #     'y': y,  # list(int) Flattened labels (integer sequences)
+        #     'texts': texts,  # list(str) Original texts
+        #     'input_lengths': input_lengths,  # list(int) Length of each input
+        #     'label_lengths': label_lengths  # list(int) Length of each label
+        # }
+        #
+
+            # X_data = np.array(x)
+            # labels = np.array(y)
+            # input_length = np.array(input_lengths)
+            # label_length = np.array(label_lengths)
+            # source_str = np.array([l for l in batch_y_trans])
+
+
 
         # 2. labels (made numerical)
-        labels = np.array([get_intseq(l, self.max_intseq_length) for l in batch_y_trans])
-        assert (labels.shape == (self.batch_size, self.max_intseq_length))
+        # get max label length
+        y_val = [get_maxseq_len(l) for l in batch_y_trans]
+        # print(y_val)
+        max_y = max(y_val)
+        # print(max_y)
+        labels = np.array([get_intseq(l, max_intseq_length=max_y) for l in batch_y_trans])
+        # print("2. labels shape:", labels.shape)
+        # print("2. labels values=", labels)
+        assert(labels.shape == (self.batch_size, max_y))
 
         # 3. input_length (required for CTC loss)
-        input_length = np.array([get_xsize(mfcc) for mfcc in X_data])
-        assert (input_length.shape == (self.batch_size,))
+        # this is the time dimension of CTC (batch x time x mfcc)
+        #input_length = np.array([get_xsize(mfcc) for mfcc in X_data])
+        input_length = np.array(x_val)
+        # print("3. input_length shape:", input_length.shape)
+        # print("3. input_length =", input_length)
+        assert(input_length.shape == (self.batch_size,))
 
         # 4. label_length (required for CTC loss)
-        label_length = np.array([get_ylen(y) for y in labels])
-        assert (label_length.shape == (self.batch_size,))
+        # this is the length of the number of label of a sequence
+        #label_length = np.array([len(l) for l in labels])
+        label_length = np.array(y_val)
+        # print("4. label_length shape:", label_length.shape)
+        # print("4. label_length =", label_length)
+        assert(label_length.shape == (self.batch_size,))
 
         # 5. source_str (used for human readable output on callback)
         source_str = np.array([l for l in batch_y_trans])
@@ -177,6 +238,8 @@ class BaseGenerator(callbacks.Callback):
 #         return
 
 
+class BlankCallback(callbacks.Callback):
+    pass
 
 
 class TestCallback(callbacks.Callback):
@@ -195,6 +258,11 @@ class TestCallback(callbacks.Callback):
     def validate_epoch_end(self):
         mean_norm_ed = 0.0
         mean_ed = 0.0
+
+        lm_mean_norm_ed = 0.0
+        lm_mean_ed = 0.0
+
+        count = 0
         self.validdata.cur_index = 0  # reset index
 
         chunks = len(self.validdata.wavpath) // self.validdata.batch_size
@@ -202,9 +270,7 @@ class TestCallback(callbacks.Callback):
         #make a pass through all the validation data and assess score
         for c in range(0, chunks):
 
-            print(self.validdata.cur_index)
             word_batch = next(self.validdata_next_val)[0]
-            #num_proc = batch_size #min of batchsize OR num_left
 
             decoded_res = decode_batch(self.test_func,
                                        word_batch['the_input'][0:self.batch_size],
@@ -214,6 +280,7 @@ class TestCallback(callbacks.Callback):
 
             for j in range(0, self.batch_size):
 
+                count += 1
                 decode_sent = decoded_res[j]
                 corrected = correction(decode_sent)
                 label = word_batch['source_str'][j]
@@ -226,18 +293,20 @@ class TestCallback(callbacks.Callback):
 
                 print(sample_wer)
 
-                edit_dist = editdistance.eval(decoded_res[j], word_batch['source_str'][j]) ## todo test edit distance with strings
+                edit_dist = editdistance.eval(label, decode_sent) ## todo test edit distance with strings
                 mean_ed += float(edit_dist)
-                mean_norm_ed += float(edit_dist) / len(word_batch['source_str'][j])
+                mean_norm_ed += float(edit_dist) / len(label)
+
+                lm_edit_dist = editdistance.eval(label, corrected) ## todo test edit distance with strings
+                lm_mean_ed += float(lm_edit_dist)
+                lm_mean_norm_ed += float(lm_edit_dist) / len(label)
                 # if(j % 16 == 0):
                 #     print("\n{}.Truth:{}\n{}.Trans:{}".format(str(j), word_batch['source_str'][j], str(j), decoded_res[j]))
 
-            mean_norm_ed = mean_norm_ed
-            mean_ed = mean_ed
-
-            print('\nOut of %d batch samples:  Mean edit distance: %.3f Mean normalized edit distance: %0.3f'
-                  % (1, mean_ed, mean_norm_ed))
-
+        print('\nOut of %d samples:  Mean edit distance: %.3f Mean normalized edit distance: %0.3f'
+                  % (count, mean_ed, mean_norm_ed))
+        print('\nOut of %d samples:  LM Mean edit distance: %.3f LM Mean normalized edit distance: %0.3f'
+              % (count, lm_mean_ed, lm_mean_norm_ed))
 
     def on_epoch_end(self, epoch, logs=None):
 
@@ -304,7 +373,8 @@ MODEL = None
 def get_model():
     global MODEL
     if MODEL is None:
-        MODEL = kenlm.Model('./lm/timit-lm.klm')
+        #MODEL = kenlm.Model('./lm/timit-lm.klm')
+        MODEL = kenlm.Model('./lm/libri-timit-lm.klm')
     return MODEL
 
 
@@ -314,7 +384,7 @@ def words(text):
 
 
 # Load known word set
-with open('./lm/word_list.txt') as f:
+with open('./lm/df_all_libri_timit_word_list.csv') as f:
     WORDS = set(words(f.read()))
 
 
@@ -358,4 +428,107 @@ def edits1(word):
 def edits2(word):
     "All edits that are two edits away from `word`."
     return (e2 for e1 in edits1(word) for e2 in edits1(e1))
+
+
+def spectrogram(samples, fft_length=256, sample_rate=2, hop_length=128):
+    """
+    Compute the spectrogram for a real signal.
+    The parameters follow the naming convention of
+    matplotlib.mlab.specgram
+
+    Args:
+        samples (1D array): input audio signal
+        fft_length (int): number of elements in fft window
+        sample_rate (scalar): sample rate
+        hop_length (int): hop length (relative offset between neighboring
+            fft windows).
+
+    Returns:
+        x (2D array): spectrogram [frequency x time]
+        freq (1D array): frequency of each row in x
+
+    Note:
+        This is a truncating computation e.g. if fft_length=10,
+        hop_length=5 and the signal has 23 elements, then the
+        last 3 elements will be truncated.
+    """
+    assert not np.iscomplexobj(samples), "Must not pass in complex numbers"
+
+    window = np.hanning(fft_length)[:, None]
+    window_norm = np.sum(window**2)
+
+    # The scaling below follows the convention of
+    # matplotlib.mlab.specgram which is the same as
+    # matlabs specgram.
+    scale = window_norm * sample_rate
+
+    trunc = (len(samples) - fft_length) % hop_length
+    x = samples[:len(samples) - trunc]
+
+    # "stride trick" reshape to include overlap
+    nshape = (fft_length, (len(x) - fft_length) // hop_length + 1)
+    nstrides = (x.strides[0], x.strides[0] * hop_length)
+    x = as_strided(x, shape=nshape, strides=nstrides)
+
+    # window stride sanity check
+    assert np.all(x[:, 1] == samples[hop_length:(hop_length + fft_length)])
+
+    # broadcast window, compute fft over columns and square mod
+    x = np.fft.rfft(x * window, axis=0)
+    x = np.absolute(x)**2
+
+    # scale, 2.0 for everything except dc and fft_length/2
+    x[1:-1, :] *= (2.0 / scale)
+    x[(0, -1), :] /= scale
+
+    freqs = float(sample_rate) / fft_length * np.arange(x.shape[0])
+
+    return x, freqs
+
+
+def spectrogram_from_file(filename, step=10, window=20, max_freq=None,
+                          eps=1e-14):
+    """ Calculate the log of linear spectrogram from FFT energy
+    Params:
+        filename (str): Path to the audio file
+        step (int): Step size in milliseconds between windows
+        window (int): FFT window size in milliseconds
+        max_freq (int): Only FFT bins corresponding to frequencies between
+            [0, max_freq] are returned
+        eps (float): Small value to ensure numerical stability (for ln(x))
+    """
+    with soundfile.SoundFile(filename) as sound_file:
+        audio = sound_file.read(dtype='float32')
+        sample_rate = sound_file.samplerate
+        if audio.ndim >= 2:
+            audio = np.mean(audio, 1)
+        if max_freq is None:
+            max_freq = sample_rate / 2
+        if max_freq > sample_rate / 2:
+            raise ValueError("max_freq must not be greater than half of "
+                             " sample rate")
+        if step > window:
+            raise ValueError("step size must not be greater than window size")
+        hop_length = int(0.001 * step * sample_rate)
+        fft_length = int(0.001 * window * sample_rate)
+        pxx, freqs = spectrogram(
+            audio, fft_length=fft_length, sample_rate=sample_rate,
+            hop_length=hop_length)
+        ind = np.where(freqs <= max_freq)[0][-1] + 1
+    return np.transpose(np.log(pxx[:ind, :] + eps))
+
+
+def featurise(audio_clip):
+    """ For a given audio clip, calculate the log of its Fourier Transform
+    Params:
+        audio_clip(str): Path to the audio clip
+    """
+
+    step = 10
+    window = 20
+    max_freq = 8000
+
+    return spectrogram_from_file(
+        audio_clip, step=step, window=window,
+        max_freq=max_freq)
 

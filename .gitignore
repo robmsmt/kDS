@@ -4,4 +4,6 @@
 Archive
 *.pyc
 .~lock.*
+lm/libri-timit-lm.arpa
+lm/libri-timit-lm.klm
 
