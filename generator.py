@@ -6,6 +6,9 @@ import python_speech_features as p
 import scipy.io.wavfile as wav
 import editdistance  # todo use tf edit dist
 
+import kenlm
+import re
+from heapq import heapify
 
 from keras.preprocessing.sequence import pad_sequences
 from keras import callbacks
@@ -186,9 +189,8 @@ class TestCallback(callbacks.Callback):
         self.val_best_mean_ed = 0
         self.val_best_norm_mean_ed = 0
 
-    def wer(self):
-        #todo
-        pass
+        self.lm = get_model()
+
 
     def validate_epoch_end(self):
         mean_norm_ed = 0.0
@@ -197,8 +199,7 @@ class TestCallback(callbacks.Callback):
 
         chunks = len(self.validdata.wavpath) // self.validdata.batch_size
 
-        #call next batch until all data
-
+        #make a pass through all the validation data and assess score
         for c in range(0, chunks):
 
             print(self.validdata.cur_index)
@@ -210,15 +211,26 @@ class TestCallback(callbacks.Callback):
                                        word_batch['source_str'][0:self.batch_size],
                                        self.batch_size)
 
-            #todo LM can go here
-            #todo WER more used metric
 
             for j in range(0, self.batch_size):
+
+                decode_sent = decoded_res[j]
+                corrected = correction(decode_sent)
+                label = word_batch['source_str'][j]
+                sample_wer = wer(label, corrected)
+
+                print("\n{}.STruth :{}\n{}.OTrans :{}\n{}.Correct:{}".format(str(j), label,
+                                                                             str(j), decode_sent,
+                                                                             str(j), corrected)
+                     )
+
+                print(sample_wer)
+
                 edit_dist = editdistance.eval(decoded_res[j], word_batch['source_str'][j]) ## todo test edit distance with strings
                 mean_ed += float(edit_dist)
                 mean_norm_ed += float(edit_dist) / len(word_batch['source_str'][j])
-                if(j % 8 == 0):
-                    print("\n{}.Truth:{}\n{}.Trans:{}".format(str(j), word_batch['source_str'][j], str(j), decoded_res[j]))
+                # if(j % 16 == 0):
+                #     print("\n{}.Truth:{}\n{}.Trans:{}".format(str(j), word_batch['source_str'][j], str(j), decoded_res[j]))
 
             mean_norm_ed = mean_norm_ed
             mean_ed = mean_ed
@@ -235,4 +247,115 @@ class TestCallback(callbacks.Callback):
         #print("Truth: {} \nTranscribed: {}".format(word_batch['source_str'], result[0]))
 
 
+def wer(original, result):
+    r"""
+    The WER is defined as the editing/Levenshtein distance on word level
+    divided by the amount of words in the original text.
+    In case of the original having more words (N) than the result and both
+    being totally different (all N words resulting in 1 edit operation each),
+    the WER will always be 1 (N / N = 1).
+    """
+    # The WER ist calculated on word (and NOT on character) level.
+    # Therefore we split the strings into words first:
+    original = original.split()
+    result = result.split()
+    return levenshtein(original, result) / float(len(original))
+
+def wers(originals, results):
+    count = len(originals)
+    rates = []
+    mean = 0.0
+    assert count == len(results)
+    for i in range(count):
+        rate = wer(originals[i], results[i])
+        mean = mean + rate
+        rates.append(rate)
+    return rates, mean / float(count)
+
+# The following code is from: http://hetland.org/coding/python/levenshtein.py
+
+def levenshtein(a,b):
+    "Calculates the Levenshtein distance between a and b."
+    n, m = len(a), len(b)
+    if n > m:
+        # Make sure n <= m, to use O(min(n,m)) space
+        a,b = b,a
+        n,m = m,n
+
+    current = list(range(n+1))
+    for i in range(1,m+1):
+        previous, current = current, [i]+[0]*n
+        for j in range(1,n+1):
+            add, delete = previous[j]+1, current[j-1]+1
+            change = previous[j-1]
+            if a[j-1] != b[i-1]:
+                change = change + 1
+            current[j] = min(add, delete, change)
+
+    return current[n]
+
+
+# Define beam with for alt sentence search
+BEAM_WIDTH = 1024
+MODEL = None
+
+
+# Lazy-load language model (TED corpus, Kneser-Ney, 4-gram, 30k word LM)
+def get_model():
+    global MODEL
+    if MODEL is None:
+        MODEL = kenlm.Model('./lm/timit-lm.klm')
+    return MODEL
+
+
+def words(text):
+    "List of words in text."
+    return re.findall(r'\w+', text.lower())
+
+
+# Load known word set
+with open('./lm/word_list.txt') as f:
+    WORDS = set(words(f.read()))
+
+
+def log_probability(sentence):
+    "Log base 10 probability of `sentence`, a list of words"
+    return get_model().score(' '.join(sentence), bos=False, eos=False)
+
+
+def correction(sentence):
+    "Most probable spelling correction for sentence."
+    layer = [(0, [])]
+    for word in words(sentence):
+        layer = [(-log_probability(node + [cword]), node + [cword]) for cword in candidate_words(word) for
+                 priority, node in layer]
+        heapify(layer)
+        layer = layer[:BEAM_WIDTH]
+    return ' '.join(layer[0][1])
+
+
+def candidate_words(word):
+    "Generate possible spelling corrections for word."
+    return (known_words([word]) or known_words(edits1(word)) or known_words(edits2(word)) or [word])
+
+
+def known_words(words):
+    "The subset of `words` that appear in the dictionary of WORDS."
+    return set(w for w in words if w in WORDS)
+
+
+def edits1(word):
+    "All edits that are one edit away from `word`."
+    letters = 'abcdefghijklmnopqrstuvwxyz'
+    splits = [(word[:i], word[i:]) for i in range(len(word) + 1)]
+    deletes = [L + R[1:] for L, R in splits if R]
+    transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R) > 1]
+    replaces = [L + c + R[1:] for L, R in splits if R for c in letters]
+    inserts = [L + c + R for L, R in splits for c in letters]
+    return set(deletes + transposes + replaces + inserts)
+
+
+def edits2(word):
+    "All edits that are two edits away from `word`."
+    return (e2 for e1 in edits1(word) for e2 in edits1(e1))
 

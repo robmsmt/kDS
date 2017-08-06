@@ -4,32 +4,11 @@ import numpy as np
 import socket
 from keras.models import model_from_json
 
-# import kenlm
-# import re
-# from heapq import heapify
+
 
 # import tensorflow as tf
 # from tensorflow.python.ops import array_ops
 
-# Define beam with for alt sentence search
-# BEAM_WIDTH = 1024
-# MODEL = None
-
-
-# # Lazy-load language model (TED corpus, Kneser-Ney, 4-gram, 30k word LM)
-# def get_model():
-#     global MODEL
-#     if MODEL is None:
-#         MODEL = kenlm.Model('../../DeepSpeech/data/lm/lm.binary')
-#     return MODEL
-#
-# def words(text):
-#     "List of words in text."
-#     return re.findall(r'\w+', text.lower())
-#
-# # Load known word set
-# with open('../../DeepSpeech/data/spell/words.txt') as f:
-#     WORDS = set(words(f.read()))
 
 
 

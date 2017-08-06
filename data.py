@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import char_map
 from utils import text_to_int_sequence
-
+import subprocess
 
 #######################################################
 
@@ -23,6 +23,8 @@ def read_text(full_wav):
                 trans = trans + clean(w)
             else:
                 trans = trans + ' ' + clean(w)
+
+        # trans = trans + '\n' ## temp output for wordlist file
 
     return start, end, trans
 
@@ -143,6 +145,23 @@ def get_all_wavs_in_path(target, sortagrad=True):
         'max_trans_charlength': max_trans_charlength,
         'max_intseq_length': max_intseq_length
     }
+
+    # create a lm from all words
+    # try:
+    # print("Trying to build 4-gram LM from all data")
+    #
+    # with open('./lm/word_list.txt', 'w') as f:
+    #     f.write(' '.join(comb)) #todo handle newlines
+    #
+    # ps = subprocess.Popen(('cat','./lm/word_list.txt'), stdout=subprocess.PIPE)
+    # args = "-o 4 "
+    # output = subprocess.check_call(["/home/rob/Dropbox/UCL/DIS/kenlm/kenlm/bin/lmplz", args], stdin=ps.stdout) #todo
+    # ps.wait()
+
+    # except Exception as e:
+    #     print("Couldn't run language model build command")
+    #     print(e)
+    #     raise(e)
 
     return dataproperties, df_all, df_train, df_valid, df_test
 
