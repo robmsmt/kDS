@@ -9,6 +9,7 @@ import editdistance  # todo use tf edit dist
 import kenlm
 import re
 from heapq import heapify
+import socket
 
 from keras.preprocessing.sequence import pad_sequences
 from keras import callbacks
@@ -266,6 +267,8 @@ class TestCallback(callbacks.Callback):
         self.validdata.cur_index = 0  # reset index
 
         chunks = len(self.validdata.wavpath) // self.validdata.batch_size
+
+        if socket.gethostname().lower() in 'rs-e5550'.lower(): chunks = 1
 
         #make a pass through all the validation data and assess score
         for c in range(0, chunks):

@@ -36,7 +36,7 @@ echo 'starting kDS script'
 SECONDS=0
 
 #kDS
-/share/apps/libc6_2.17/lib/x86_64-linux-gnu/ld-2.17.so $(command -v /home/rsmith/Python-2.7.13/bin/python) /cluster/project2/darkspeech/rob/kDS/run-train.py 
+/share/apps/libc6_2.17/lib/x86_64-linux-gnu/ld-2.17.so $(command -v /home/rsmith/Python-2.7.13/bin/python) /cluster/project2/darkspeech/rob/kDS/run-train.py $2
 
 
 duration=$SECONDS
