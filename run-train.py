@@ -47,6 +47,10 @@ def main(args, runtime):
     frames = [df_valid, df_test]
     df_supertest = pd.concat(frames)
 
+    df_supertest = df_supertest[df_supertest['transcript'].map(len) <= 140]
+
+    print("Information about test set:")
+    print(df_supertest.describe())
 
     ## 1b. load in Librispeech
     libri_path = get_librispeech_data_path()

@@ -335,7 +335,7 @@ def lers(originals, results):
         norm_mean = norm_mean + normrate
 
         rates.append(rate)
-        norm_rates.append(normrate)
+        norm_rates.append(round(normrate, 4))
 
     return rates, (mean / float(count)), norm_rates, (norm_mean/float(count))
 
