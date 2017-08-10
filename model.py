@@ -32,6 +32,8 @@ from keras.layers import TimeDistributed, Dropout
 from keras.layers.merge import add  # , # concatenate BAD FOR COREML
 from keras.utils.conv_utils import conv_output_length
 
+import tensorflow as tf
+
 
 # Define CTC loss
 def ctc_lambda_func(args):
@@ -236,24 +238,21 @@ def ds2_gru_model(input_dim=26, output_dim=29, nodes=1024, initialization='gloro
 
     input_data = Input(shape=(None, input_dim), name='the_input')
 
-    # todo error InvalidArgumentError (see above for traceback): sequence_length(0) <= 54
-    # output = Conv1D(filters=nodes, kernel_size=conv_context,padding='valid',activation='relu',
-    #                 kernel_initializer=initialization, strides=2)(input_data)
+    # todo error STRIDE=2 InvalidArgumentError (see above for traceback): sequence_length(0) <= 54
+    # todo errro STRIDE=1                                                 sequence_length(9) <= 108
+    # todo       STRIKE=4                                                 sequence_length(0) <= 27
+    # output = Conv1D(filters=nodes, kernel_size=12,padding='valid',activation='relu',
+    #                 kernel_initializer=initialization, strides=4)(input_data)
 
     output = TimeDistributed(Dense(nodes, name='fc1', activation='relu'))(input_data)
     output = TimeDistributed(Dense(nodes, name='fc2', activation='relu'))(output)
     output = TimeDistributed(Dense(nodes, name='fc3', activation='relu'))(output)
 
-    rnn_1f = GRU(nodes, activation='relu', return_sequences=True, go_backwards=False,
-                 kernel_initializer='he_normal', name='rnn_f')(output)
-
-    rnn_1b = GRU(nodes, activation='relu', return_sequences=True, go_backwards=True,
-                 kernel_initializer='he_normal', name='rnn_b')(output)
-
-    rnn_bidir = add([rnn_1f, rnn_1b])
+    x = Bidirectional(GRU(nodes, return_sequences=True, activation='relu', kernel_initializer=initialization),
+                      merge_mode='sum')(output)
 
     # Layer 5+6 Time Dist Layer & Softmax
-    y_pred = TimeDistributed(Dense(output_dim, name="y_pred", activation="softmax", init=initialization))(rnn_bidir)
+    y_pred = TimeDistributed(Dense(output_dim, name="y_pred", activation="softmax"))(x)
 
     # labels = K.placeholder(name='the_labels', ndim=1, dtype='int32')
     labels = Input(name='the_labels', shape=[None,], dtype='int32')
@@ -270,7 +269,7 @@ def ds2_gru_model(input_dim=26, output_dim=29, nodes=1024, initialization='gloro
     model = Model(inputs=[input_data, labels, input_length, label_length], outputs=loss_out)
     # model.conv_output_length = lambda x: conv_output_length(x, conv_context, conv_border_mode, conv_stride)
 
-    return model, input_data, y_pred
+    return model, input_data, y_pred, input_length
 
 
 ###############################################################
@@ -322,3 +321,19 @@ def decode(inputs, **kwargs):
 
     return decoded
 
+
+def metric_ler(y_true, y_pred, **kwargs):
+    """
+    Using tf.edit_distance
+
+    this needs to be chagned to output of decode
+    TypeError: Value passed to parameter 'reduction_indices' has DataType float32 not in list of allowed values: int32, int64
+
+    return tf.reduce_mean(tf.edit_distance(tf.SparseTensor(y_pred), tf.SparseTensor(y_true), **kwargs))
+    TypeError: __init__() takes exactly 4 arguments (2 given)
+
+    """
+    # tf.sparse_tensor_to_dense(sparse_tensor)
+    ##todo if you get this working add this to compile metrics=[metric_ler]
+
+    return tf.reduce_mean(y_pred, y_true, **kwargs)

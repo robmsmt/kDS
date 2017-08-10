@@ -184,8 +184,8 @@ def check_all_wavs_and_trans_from_csvs(csvs, timit, sortagrad=True):
     listcomb = df_all['transcript'].tolist()
     print("Total number of files:", len(listcomb))
 
-    print("removing any sentences that are too big")
-    df_final = df_all[df_all['transcript'].map(len) < 200]
+    print("removing any sentences that are too big- tweetsize")
+    df_final = df_all[df_all['transcript'].map(len) <= 140]
 
     listcomb = df_final['transcript'].tolist()
     print("Total number of files (after reduction):", len(listcomb))

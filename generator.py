@@ -329,10 +329,13 @@ def lers(originals, results):
     for i in range(count):
         rate = levenshtein(originals[i], results[i])
         mean = mean + rate
-        norm_mean = norm_mean + (float(rate) / len(originals[i]))
+
+        normrate = (float(rate) / len(originals[i]))
+
+        norm_mean = norm_mean + norm_rates
 
         rates.append(rate)
-        norm_rates.append(norm_mean)
+        norm_rates.append(normrate)
 
     return rates, (mean / float(count)), norm_rates, (norm_mean/float(count))
 
