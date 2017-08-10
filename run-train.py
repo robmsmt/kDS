@@ -119,7 +119,7 @@ def main(args, runtime):
     # valid_steps = (len(df_supertest.index) // batchsize)
 
     ## Laptop testmode
-    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 4; tensorboard=False; args.epochs=4
+    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 4; args.tensorboard=False; args.epochs=4
 
 
     iterate = K.function([input_data, K.learning_phase()], [y_pred])
@@ -129,7 +129,7 @@ def main(args, runtime):
     test_cb = TestCallback(iterate, validdata, model, runtimestr, decode)
     tb_cb = BlankCallback()
 
-    if tensorboard:
+    if args.tensorboard:
         tb_cb = TensorBoard(log_dir='./tensorboard/{}/'.format(runtimestr), histogram_freq=1, write_graph=True, write_images=True)
 
     model.fit_generator(generator=traindata.next_batch(),
