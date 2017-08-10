@@ -67,7 +67,7 @@ def main(args, runtime):
 
 
     ## 2. init data generators
-    traindata = BaseGenerator(dataframe=df_train, dataproperties=lib_dataproperties, training=True, batch_size=args.batchsize)
+    traindata = BaseGenerator(dataframe=df_lib_all, dataproperties=lib_dataproperties, training=True, batch_size=args.batchsize)
     validdata = BaseGenerator(dataframe=df_supertest, dataproperties=timit_dataproperties, training=False, batch_size=args.batchsize)
 
 
