@@ -70,9 +70,20 @@ def main(args, runtime):
     lib_dataproperties, df_lib_all = check_all_wavs_and_trans_from_csvs(csvs, df_train)
 
 
+
+    if(args.deepspeech == 1):
+        spectogram = False
+    elif(args.deepspeech == 2):
+        spectogram = True
+    else:
+        spectogram = False
+
+
     ## 2. init data generators
-    traindata = BaseGenerator(dataframe=df_lib_all, dataproperties=lib_dataproperties, training=True, batch_size=args.batchsize)
-    validdata = BaseGenerator(dataframe=df_supertest, dataproperties=timit_dataproperties, training=False, batch_size=args.batchsize)
+    traindata = BaseGenerator(dataframe=df_lib_all, dataproperties=lib_dataproperties,
+                              training=True, batch_size=args.batchsize, spectogram=spectogram)
+    validdata = BaseGenerator(dataframe=df_supertest, dataproperties=timit_dataproperties,
+                              training=False, batch_size=args.batchsize, spectogram=spectogram)
 
 
     ## 3. Load existing or create new model
@@ -103,7 +114,7 @@ def main(args, runtime):
 
         elif(args.deepspeech==2):
             print('DS{}'.format(args.deepspeech))
-            model, input_data, y_pred, input_length = ds2_gru_model(input_dim=26, output_dim=29, nodes=1024,
+            model, input_data, y_pred, input_length = ds2_gru_model(input_dim=161, output_dim=29, nodes=1024,
                                                       initialization='glorot_uniform')
             opt = Adam(lr=0.001, clipnorm=5)
 
@@ -175,13 +186,13 @@ if __name__ == '__main__':
                             'weights assumed as same name _weights'
                             ' e.g. --loadcheckpointpath ./checkpoints/'
                             'TRIMMED_ds_ctc_model.json ')
-    parser.add_argument('--epochs', type=int, default=100,
+    parser.add_argument('--epochs', type=int, default=50,
                        help='Number of epochs to train the model')
-    parser.add_argument('--batchsize', type=int, default=16,
+    parser.add_argument('--batchsize', type=int, default=32,
                        help='batch_size used to train the model')
     parser.add_argument('--tensorboard', type=bool, default=True,
                        help='batch_size used to train the model')
-    parser.add_argument('--deepspeech', type=int, default=1,
+    parser.add_argument('--deepspeech', type=int, default=2,
                        help='choose between deepspeech versions (when training not loading) '
                             '--deepspeech=1 uses fully connected layers with simplernn'
                             '--deepspeech=2 uses fully connected with GRU'

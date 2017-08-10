@@ -17,7 +17,7 @@ from numpy.lib.stride_tricks import as_strided
 
 from utils import decode_batch, text_to_int_sequence, save_model
 
-# import soundfile
+import soundfile
 
 def get_maxseq_len(trans):
     # PAD
@@ -37,6 +37,17 @@ def get_max_time(filename):
     r = p.mfcc(audio, samplerate=fs, numcep=26)  # 2D array -> timesamples x mfcc_features
     return r.shape[0]  #
 
+def get_max_specto_time(filename):
+    r = spectrogram_from_file(filename)
+    # print(r.shape)
+    return r.shape[0]  #
+
+def make_specto_shape(filename,padlen=778):
+    r = spectrogram_from_file(filename)
+    t = np.transpose(r)  # 2D array ->  spec x timesamples
+    X = pad_sequences(t, maxlen=padlen, dtype='float', padding='post', truncating='post').T
+
+    return X # MAXtimesamples x specto {max x 161}
 
 def make_mfcc_shape(filename,padlen=778):
     fs, audio = wav.read(filename)
@@ -50,8 +61,9 @@ def get_xsize(val):
 
 
 class BaseGenerator(callbacks.Callback):
-    def __init__(self, dataframe, dataproperties, training, batch_size=16):
+    def __init__(self, dataframe, dataproperties, training, batch_size=16, spectogram=False):
         self.training_data = training
+        self.spectogram = spectogram
         self.df = dataframe
         self.dataproperties = dataproperties
         #['wav_filesize','transcript','wav_filename']
@@ -86,14 +98,26 @@ class BaseGenerator(callbacks.Callback):
             print(batch_x)
             print(batch_y_trans)
 
-        # 0. get the maximum time length of the batch
-        x_val = [get_max_time(file_name) for file_name in batch_x]
-        max_val = max(x_val)
-        # print("Max batch time value is:", max_val)
+
 
         # 1. X_data (the MFCC's for the batch)
-        X_data = np.array([make_mfcc_shape(file_name, padlen=max_val) for file_name in batch_x])
-        assert (X_data.shape == (self.batch_size, max_val, 26))
+        if(self.spectogram):
+            # 0. get the maximum time length of the batch
+            x_val = [get_max_specto_time(file_name) for file_name in batch_x]
+            max_val = max(x_val)
+            # print("Max batch time value is:", max_val)
+
+            X_data = np.array([make_specto_shape(file_name, padlen=max_val) for file_name in batch_x])
+            assert (X_data.shape == (self.batch_size, max_val, 161))
+
+        else:
+            # 0. get the maximum time length of the batch
+            x_val = [get_max_time(file_name) for file_name in batch_x]
+            max_val = max(x_val)
+            # print("Max batch time value is:", max_val)
+
+            X_data = np.array([make_mfcc_shape(file_name, padlen=max_val) for file_name in batch_x])
+            assert (X_data.shape == (self.batch_size, max_val, 26))
         # print("1. X_data shape:", X_data.shape)
         # print("1. X_data:", X_data)
 
@@ -266,11 +290,11 @@ class TestCallback(callbacks.Callback):
         print("########################################################")
         print("Completed Validation Test: WER & LER results")
         rates, mean = wers(originals, results)
-        print("WER rates     :", rates)
+        # print("WER rates     :", rates)
         lrates, lmean, norm_lrates, norm_lmean = lers(originals, results)
-        print("LER rates     :", lrates)
-        print("LER norm rates:", norm_lrates)
-        print("########################################################")
+        # print("LER rates     :", lrates)
+        # print("LER norm rates:", norm_lrates)
+        # print("########################################################")
         print("Test WER average is   :", mean)
         print("Test LER average is   :", lmean)
         print("Test normalised LER is:", norm_lmean)
@@ -484,6 +508,7 @@ def spectrogram(samples, fft_length=256, sample_rate=2, hop_length=128):
     freqs = float(sample_rate) / fft_length * np.arange(x.shape[0])
 
     return x, freqs
+
 
 
 def spectrogram_from_file(filename, step=10, window=20, max_freq=None,

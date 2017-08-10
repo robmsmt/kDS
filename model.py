@@ -233,7 +233,7 @@ def build_ds1_simple_rnn_no_ctc_and_xfer_weights(loaded_model, fc_size=2048, rnn
 
 
 
-def ds2_gru_model(input_dim=26, output_dim=29, nodes=1024, initialization='glorot_uniform'):
+def ds2_gru_model(input_dim=161, output_dim=29, nodes=1024, initialization='glorot_uniform'):
     """ Build a recurrent network (CTC) for speech with GRU units """
 
     input_data = Input(shape=(None, input_dim), name='the_input')
@@ -241,8 +241,9 @@ def ds2_gru_model(input_dim=26, output_dim=29, nodes=1024, initialization='gloro
     # todo error STRIDE=2 InvalidArgumentError (see above for traceback): sequence_length(0) <= 54
     # todo errro STRIDE=1                                                 sequence_length(9) <= 108
     # todo       STRIKE=4                                                 sequence_length(0) <= 27
-    # output = Conv1D(filters=nodes, kernel_size=12,padding='valid',activation='relu',
-    #                 kernel_initializer=initialization, strides=4)(input_data)
+    # output = Conv1D(filters=nodes, kernel_size=1,padding='valid',activation='relu',
+    #                 kernel_initializer=initialization, strides=2)(input_data)
+
 
     output = TimeDistributed(Dense(nodes, name='fc1', activation='relu'))(input_data)
     output = TimeDistributed(Dense(nodes, name='fc2', activation='relu'))(output)
@@ -267,7 +268,12 @@ def ds2_gru_model(input_dim=26, output_dim=29, nodes=1024, initialization='gloro
                                                                        label_length])
 
     model = Model(inputs=[input_data, labels, input_length, label_length], outputs=loss_out)
-    # model.conv_output_length = lambda x: conv_output_length(x, conv_context, conv_border_mode, conv_stride)
+    # input_length, filter_size,
+    # padding, stride, dilation = 1
+
+    # model.conv_output_length = lambda x: conv_output_length(x, filter_size=12, padding='valid', stride=4)
+
+
 
     return model, input_data, y_pred, input_length
 
