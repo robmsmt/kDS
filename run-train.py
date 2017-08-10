@@ -114,8 +114,7 @@ def main(args, runtime):
         print(model.summary(line_length=80))
 
     ## 4. train
-    #train_steps = len(df_lib_all.index) // args.batchsize
-    train_steps = len(df_train.index) // args.batchsize
+    train_steps = len(df_lib_all.index) // args.batchsize
     # valid_steps = (len(df_supertest.index) // batchsize)
 
     ## Laptop testmode
