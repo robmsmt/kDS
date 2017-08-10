@@ -332,7 +332,7 @@ def lers(originals, results):
 
         normrate = (float(rate) / len(originals[i]))
 
-        norm_mean = norm_mean + norm_rates
+        norm_mean = norm_mean + normrate
 
         rates.append(rate)
         norm_rates.append(normrate)
