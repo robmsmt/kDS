@@ -24,21 +24,24 @@ from model import *
 # from keras import backend as K
 from keras.callbacks import ModelCheckpoint, TensorBoard
 import keras
+from keras.optimizers import Adam
+
 
 #######################################################
 
+# Prevent pool_allocator message
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-
-def main(sortagrad, loadcheckpoint, epochs, batchsize, tensorboard, runtime, deepspeech):
+def main(args, runtime):
     '''
     There are 5 simple steps to this program
     '''
 
-    runtimestr = "DS"+str(deepspeech)+"_"+runtime
+    runtimestr = "DS"+str(args.deepspeech)+"_"+runtime
 
     ## 1. get path and data
     timit_path = get_timit_data_path()
-    dataproperties, df_all, df_train, df_valid, df_test = get_all_wavs_in_path(timit_path, sortagrad=sortagrad)
+    timit_dataproperties, df_all, df_train, df_valid, df_test = get_all_wavs_in_path(timit_path, sortagrad=args.sortagrad)
 
     #merge
     frames = [df_valid, df_test]
@@ -60,62 +63,70 @@ def main(sortagrad, loadcheckpoint, epochs, batchsize, tensorboard, runtime, dee
     for f in lib_filelist:
         csvs = csvs + libri_path + f
 
-    dataproperties, df_lib_all = check_all_wavs_and_trans_from_csvs(csvs, df_train)
+    lib_dataproperties, df_lib_all = check_all_wavs_and_trans_from_csvs(csvs, df_train)
+
 
     ## 2. init data generators
-    traindata = BaseGenerator(dataframe=df_lib_all, dataproperties=dataproperties, batch_size=batchsize)
-    validdata = BaseGenerator(dataframe=df_supertest, dataproperties=dataproperties, batch_size=batchsize)
+    traindata = BaseGenerator(dataframe=df_train, dataproperties=lib_dataproperties, training=True, batch_size=args.batchsize)
+    validdata = BaseGenerator(dataframe=df_supertest, dataproperties=timit_dataproperties, training=False, batch_size=args.batchsize)
 
 
     ## 3. Load existing or create new model
-    if loadcheckpoint:
+    if args.loadcheckpointpath:
         # load existing -todo test this
 
-        _, input_data, y_pred = build_ds1_simple_rnn(fc_size=2048,
+        assert(os.path.isfile(args.loadcheckpointpath))
+
+        #todo think this is needed for callback
+        _, input_data, y_pred = ds1(fc_size=2048,
                                                          rnn_size=512,
                                                          mfcc_features=26,
-                                                         max_mfcclength_audio=778,
-                                                         dropout=[0.2, 0.5, 0.3],
-                                                         num_classes=30,
-                                                         train_mode=1)  # required for callback todo test
-        model = load_model_checkpoint()
+                                                         num_classes=30) # required for callback todo test
+        print(input_data, y_pred)
+
+        model = load_model_checkpoint(custom_objects={'ctc': ctc}, path=args.loadcheckpointpath)
+        input_data = model.inputs[0]
+        y_pred = model.outputs[0]
+
+        print(input_data, y_pred)
 
     else:
         # new model
+        if(args.deepspeech==1):
+            print('DS{}'.format(args.deepspeech))
+            model, input_data, y_pred, input_length = ds1(fc_size=2048, rnn_size=512,mfcc_features=26,num_classes=29)
+            opt = SGD(lr=0.02, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=5)
 
-        if(deepspeech==1):
-            model, input_data, y_pred = build_ds1_simple_rnn(fc_size=2048,
-                                                             rnn_size=512,
-                                                             mfcc_features=26,
-                                                             max_mfcclength_audio=778,
-                                                             dropout=[0.2, 0.5, 0.3],
-                                                             num_classes=30,
-                                                             train_mode=1)
-        elif(deepspeech==2):
-            model, input_data, y_pred = ds2_gru_model(input_dim=26, output_dim=30,nodes=1024, conv_context=11,
-                                                      conv_border_mode='valid', conv_stride=2,
-                                                      initialization='glorot_uniform', batch_norm=False)
+        elif(args.deepspeech==2):
+            print('DS{}'.format(args.deepspeech))
+            model, input_data, y_pred, input_length = ds2_gru_model(input_dim=26, output_dim=29, nodes=1024,
+                                                      initialization='glorot_uniform')
+            opt = Adam(lr=0.001, clipnorm=5)
 
-        # testmodel, test_input_data, test_y_pred = build_ds1_simple_rnn(fc_size=2048,
-        #                                                  rnn_size=512,
-        #                                                  mfcc_features=26,
-        #                                                  max_mfcclength_audio=778,
-        #                                                  dropout=[0.0, 0.0, 0.0],
-        #                                                  num_classes=30,
-        #                                                  train_mode=0)
+        elif(args.deepspeech==3):
+            print('DS{}'.format(args.deepspeech))
+            model, input_data, y_pred, input_length = ds1(fc_size=2048, rnn_size=512, mfcc_features=26, num_classes=29)
+            opt = Adam(lr=0.001, clipnorm=5)
+
+
+        # Compile with dummy loss
+        model.compile(loss=ctc, optimizer=opt)
+        print(model.summary(line_length=80))
 
     ## 4. train
-    train_steps = len(df_lib_all.index) // batchsize
+    #train_steps = len(df_lib_all.index) // args.batchsize
+    train_steps = len(df_train.index) // args.batchsize
     # valid_steps = (len(df_supertest.index) // batchsize)
 
     ## Laptop testmode
-    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 2; valid_steps=2; tensorboard=True
+    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 4; tensorboard=False; args.epochs=4
 
 
     iterate = K.function([input_data, K.learning_phase()], [y_pred])
-    test_cb = TestCallback(iterate, validdata)
+    # decode = K.function([y_pred, input_length], [dec])
+    decode = None # temp
 
-    cp_cb = ModelCheckpoint(filepath='./checkpoints/epoch/{}_epoch_check.hdf5'.format(runtimestr), verbose=1, save_best_only=False)
+    test_cb = TestCallback(iterate, validdata, model, runtimestr, decode)
     tb_cb = BlankCallback()
 
     if tensorboard:
@@ -123,20 +134,29 @@ def main(sortagrad, loadcheckpoint, epochs, batchsize, tensorboard, runtime, dee
 
     model.fit_generator(generator=traindata.next_batch(),
                         steps_per_epoch=train_steps,
-                        epochs=epochs,
-                        callbacks=[cp_cb, tb_cb, test_cb, traindata, validdata],  ##create custom callback to handle stop for valid
-                        validation_data=validdata.next_batch(),
-                        validation_steps=1,
+                        epochs=args.epochs,
+                        callbacks=[tb_cb, test_cb, traindata, validdata],  ##create custom callback to handle stop for valid
+                        # validation_data=validdata.next_batch(),
+                        # validation_steps=1,
                         initial_epoch=0
                         )
 
+    ## These are the most important metrics
+    print("Mean WER   :", test_cb.mean_wer_log)
+    print("Mean LER   :", test_cb.mean_ler_log)
+    print("NormMeanLER:",test_cb.norm_mean_ler_log)
+
     ## 5. final test - move this to run-test
-    # model.predict_generator(testdata.next_batch(), 8, workers=1, verbose=1)
+    res = model.evaluate_generator(validdata.next_batch(), 8, max_q_size=10, workers=1)
+    print(res)
+
 
     ## save final version of model
-    save_model(model, name="./checkpoints/fin/{}_ds_ctc_FIN".format(runtimestr))
+    save_model(model, name="./checkpoints/fin/{}_ds_ctc_FIN_loss{}".format(runtimestr,int(res)))
 
-
+    ###
+    # todo this is not a ready output
+    # validdata.export_test_mfcc()
 
 #######################################################
 
@@ -147,9 +167,12 @@ if __name__ == '__main__':
 
     parser.add_argument('--sortagrad', type=bool, default=True,
                        help='If true, we sort utterances by their length in the first epoch')
-    parser.add_argument('--loadcheckpoint', type=bool, default=False,
-                       help='If true, load for the last checkpoint at the default path we find')
-    parser.add_argument('--epochs', type=int, default=10,
+    parser.add_argument('--loadcheckpointpath', type=str, default='', # ./checkpoints/fin/ds_ctc_model_epoch_end.hdf5',
+                       help='If value set, load the checkpoint json '
+                            'weights assumed as same name _weights'
+                            ' e.g. --loadcheckpointpath ./checkpoints/'
+                            'TRIMMED_ds_ctc_model.json ')
+    parser.add_argument('--epochs', type=int, default=100,
                        help='Number of epochs to train the model')
     parser.add_argument('--batchsize', type=int, default=16,
                        help='batch_size used to train the model')
@@ -158,18 +181,16 @@ if __name__ == '__main__':
     parser.add_argument('--deepspeech', type=int, default=1,
                        help='choose between deepspeech versions (when training not loading) '
                             '--deepspeech=1 uses fully connected layers with simplernn'
-                            '--deepspeech=2 uses fully connected with GRU')
-
+                            '--deepspeech=2 uses fully connected with GRU'
+                            '--deepspeech=3 is custom model')
     args = parser.parse_args()
     runtime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
 
     assert(keras.__version__ == "2.0.4") ## CoreML is super strict
 
-    main(args.sortagrad, args.loadcheckpoint, args.epochs, args.batchsize, args.tensorboard, runtime, args.deepspeech)
+    main(args, runtime)
 
 
-###
-#todo this is not a ready output
-#testdata.export_test_mfcc()
+
 
 

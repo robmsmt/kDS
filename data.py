@@ -132,9 +132,6 @@ def get_all_wavs_in_path(target, sortagrad=True):
     print("max_trans_charlength:", max_trans_charlength)
     # ('max_trans_charlength:', 80)
 
-    ## TODO could readd the mfcc checks for safety
-    # ('max_mfcc_len:', 778, 'at comb index:', 541)
-
     all_vocab = set(all_words)
     print("Words:", len(all_words))
     print("Vocab:", len(all_vocab))
@@ -187,6 +184,12 @@ def check_all_wavs_and_trans_from_csvs(csvs, timit, sortagrad=True):
     listcomb = df_all['transcript'].tolist()
     print("Total number of files:", len(listcomb))
 
+    print("removing any sentences that are too big")
+    df_final = df_all[df_all['transcript'].map(len) < 200]
+
+    listcomb = df_final['transcript'].tolist()
+    print("Total number of files (after reduction):", len(listcomb))
+
     comb = []
 
     for t in listcomb:
@@ -196,7 +199,7 @@ def check_all_wavs_and_trans_from_csvs(csvs, timit, sortagrad=True):
     # 6300 TIMIT
     # (4620, 840, 840) TIMIT
 
-    ##todo put in a remove words or phrases over a certain threshold (either time or label based)
+
 
     ## SIZE CHECKS
     max_intseq_length = get_max_intseq(comb)
@@ -227,9 +230,9 @@ def check_all_wavs_and_trans_from_csvs(csvs, timit, sortagrad=True):
     }
 
     if sortagrad:
-        df_all = df_all.sort_values(by='wav_filesize', ascending=True)
+        df_final = df_final.sort_values(by='wav_filesize', ascending=True)
 
-    return dataproperties, df_all
+    return dataproperties, df_final
 
 
 def get_data_from_pandas_files(target, sortagrad=True):
@@ -280,5 +283,5 @@ def get_max_intseq(comb):
 
 def get_number_of_char_classes():
     ## TODO would be better to check with dataset (once cleaned)
-    num_classes = len(char_map.char_map)+2 ##need +1 for ctc null char +1 pad
+    num_classes = len(char_map.char_map)+1 ##need +1 for ctc null char +1 pad
     return num_classes

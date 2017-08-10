@@ -15,9 +15,9 @@ from keras.preprocessing.sequence import pad_sequences
 from keras import callbacks
 from numpy.lib.stride_tricks import as_strided
 
-from utils import decode_batch, text_to_int_sequence
+from utils import decode_batch, text_to_int_sequence, save_model
 
-import soundfile
+# import soundfile
 
 def get_maxseq_len(trans):
     # PAD
@@ -28,7 +28,7 @@ def get_intseq(trans, max_intseq_length=80):
     # PAD
     t = text_to_int_sequence(trans)
     while (len(t) < max_intseq_length):
-        t.append(0)  # replace with a space char to pad
+        t.append(27)  # replace with a space char to pad
     # print(t)
     return t
 
@@ -50,7 +50,8 @@ def get_xsize(val):
 
 
 class BaseGenerator(callbacks.Callback):
-    def __init__(self, dataframe, dataproperties, batch_size=16, max_intseq_length=80):
+    def __init__(self, dataframe, dataproperties, training, batch_size=16):
+        self.training_data = training
         self.df = dataframe
         self.dataproperties = dataproperties
         #['wav_filesize','transcript','wav_filename']
@@ -62,7 +63,6 @@ class BaseGenerator(callbacks.Callback):
 
         self.batch_size = batch_size
         self.cur_index = 0
-        self.max_intseq_length = 80  # todo extract this from dataproperties for all datasets
 
         self.feats_std = 0
         self.feats_mean = 0
@@ -96,41 +96,6 @@ class BaseGenerator(callbacks.Callback):
         assert (X_data.shape == (self.batch_size, max_val, 26))
         # print("1. X_data shape:", X_data.shape)
         # print("1. X_data:", X_data)
-
-        # features = [featurise(a) for a in batch_x]
-        # input_lengths = [f.shape[0] for f in features]
-        # max_length = max(input_lengths)
-        # feature_dim = features[0].shape[1]
-        # # mb_size = len(features)
-        #
-        # # Pad all the inputs so that they are all the same length
-        # x = np.zeros((self.batch_size, max_length, feature_dim))
-        # y = []
-        # label_lengths = []
-        # for i in range(self.batch_size):
-        #     # feat = features[i]
-        #     # feat = self.normalize(feat)  # Center using means and std
-        #     # x[i, :feat.shape[0], :] = feat
-        #     label = text_to_int_sequence(batch_y_trans[i])
-        #     y.append(label)
-        #     label_lengths.append(len(label))
-        # Flatten labels to comply with warp-CTC signature
-        # y = reduce(lambda i, j: i + j, y)
-        # return {
-        #     'x': x,  # (0-padded features of shape(mb_size,timesteps,feat_dim)
-        #     'y': y,  # list(int) Flattened labels (integer sequences)
-        #     'texts': texts,  # list(str) Original texts
-        #     'input_lengths': input_lengths,  # list(int) Length of each input
-        #     'label_lengths': label_lengths  # list(int) Length of each label
-        # }
-        #
-
-            # X_data = np.array(x)
-            # labels = np.array(y)
-            # input_length = np.array(input_lengths)
-            # label_length = np.array(label_lengths)
-            # source_str = np.array([l for l in batch_y_trans])
-
 
 
         # 2. labels (made numerical)
@@ -202,50 +167,44 @@ class BaseGenerator(callbacks.Callback):
         pass
 
     def on_epoch_end(self, epoch, logs={}):
-        print("EPOCH END - shuffling data")
-        self.wavpath, self.transcript, self.finish = shuffle(self.wavpath,
+        if(self.training_data):
+            print("EPOCH END - shuffling data")
+            self.wavpath, self.transcript, self.finish = shuffle(self.wavpath,
                                                              self.transcript,
                                                              self.finish)
 
-#
-# class TestValidGenerator(BaseGenerator):
-#     def __init__(self):
-#         super(BaseGenerator, self).__init__()
-#
-#     '''
-#     Extends the BaseGenerator class as specific functions will be required for test/valid data
-#
-#     '''
-#
-#     def export_test_mfcc(self):
-#         # this is used to export data e.g. into iOS
-#
-#         testset = next(self.next_batch())[0]
-#         mfcc = testset['the_input'][0:self.batch_size] ## export all mfcc's in batch #26 x 29 ?
-#         words = testset['source_str'][0:self.batch_size]
-#         labels = testset['the_labels'][0:self.batch_size]
-#
-#         print("exporting:", type(mfcc))
-#         print(mfcc.shape)
-#         print(words.shape)
-#         print(labels.shape)
-#
-#         # we save each mfcc/words/label as it's own csv file
-#         for i in range(0, mfcc.shape[0]):
-#             np.savetxt('./test_mfccs/test_mfcc_{}.csv'.format(i), mfcc[i,:,:], delimiter=',')
-#             np.savetxt('./test_mfccs/test_words_{}.csv'.format(i), words[i,:], delimiter=',')
-#             np.savetxt('./test_mfccs/test_labels_{}.csv'.format(i), labels[i,:], delimiter=',')
-#
-#         return
+    def export_test_mfcc(self):
+        # this is used to export data e.g. into iOS
+
+        testset = next(self.next_batch())[0]
+        mfcc = testset['the_input'][0:self.batch_size] ## export all mfcc's in batch #26 x 29 ?
+        words = testset['source_str'][0:self.batch_size]
+        labels = testset['the_labels'][0:self.batch_size]
+
+        print("exporting:", type(mfcc))
+        print(mfcc.shape)
+        print(words.shape)
+        print(labels.shape)
+
+        # we save each mfcc/words/label as it's own csv file
+        for i in range(0, mfcc.shape[0]):
+            np.savetxt('./test_mfccs/test_mfcc_{}.csv'.format(i), mfcc[i,:,:], delimiter=',')
+
+        print(words)
+        print(labels)
+
+        return
 
 
 class BlankCallback(callbacks.Callback):
     pass
 
 
+
 class TestCallback(callbacks.Callback):
-    def __init__(self, test_func, validdata):
+    def __init__(self, test_func, validdata, model, runtimestr, decccc):
         self.test_func = test_func
+        self.test_decccc = decccc
         self.validdata = validdata
         self.validdata_next_val = self.validdata.next_batch()
         self.batch_size = validdata.batch_size
@@ -255,26 +214,30 @@ class TestCallback(callbacks.Callback):
 
         self.lm = get_model()
 
+        self.model = model
+        self.runtimestr = runtimestr
+
+        self.mean_wer_log = []
+        self.mean_ler_log = []
+        self.norm_mean_ler_log = []
+
 
     def validate_epoch_end(self):
-        mean_norm_ed = 0.0
-        mean_ed = 0.0
 
-        lm_mean_norm_ed = 0.0
-        lm_mean_ed = 0.0
-
+        originals = []
+        results = []
         count = 0
         self.validdata.cur_index = 0  # reset index
 
-        chunks = len(self.validdata.wavpath) // self.validdata.batch_size
+        allvalid = len(self.validdata.wavpath) // self.validdata.batch_size
 
-        if socket.gethostname().lower() in 'rs-e5550'.lower(): chunks = 1
+        if socket.gethostname().lower() in 'rs-e5550'.lower(): allvalid = 2
+
 
         #make a pass through all the validation data and assess score
-        for c in range(0, chunks):
+        for c in range(0, allvalid):
 
             word_batch = next(self.validdata_next_val)[0]
-
             decoded_res = decode_batch(self.test_func,
                                        word_batch['the_input'][0:self.batch_size],
                                        word_batch['source_str'][0:self.batch_size],
@@ -282,38 +245,47 @@ class TestCallback(callbacks.Callback):
 
 
             for j in range(0, self.batch_size):
-
+                # print(c,j)
                 count += 1
                 decode_sent = decoded_res[j]
                 corrected = correction(decode_sent)
                 label = word_batch['source_str'][j]
-                sample_wer = wer(label, corrected)
+                # cor_wer = wer(label, corrected)
+                # dec_wer = wer(label, decode_sent)
 
-                print("\n{}.STruth :{}\n{}.OTrans :{}\n{}.Correct:{}".format(str(j), label,
-                                                                             str(j), decode_sent,
-                                                                             str(j), corrected)
-                     )
+                # if(dec_wer < 0.5 or cor_wer < 0.5):
+                #     print("\n{}.GroundTruth:{}\n{}.Transcribed:{}\n{}.LMCorrected:{}".format(str(j), label,
+                #                                                                  str(j), decode_sent,
+                #                                                                  str(j), corrected))
+                #
+                #     print("Sample Decoded WER:{}, Corrected LM WER:{}".format(dec_wer, cor_wer))
 
-                print(sample_wer)
+                originals.append(label)
+                results.append(corrected)
 
-                edit_dist = editdistance.eval(label, decode_sent) ## todo test edit distance with strings
-                mean_ed += float(edit_dist)
-                mean_norm_ed += float(edit_dist) / len(label)
+        print("########################################################")
+        print("Completed Validation Test: WER & LER results")
+        rates, mean = wers(originals, results)
+        print("WER rates     :", rates)
+        lrates, lmean, norm_lrates, norm_lmean = lers(originals, results)
+        print("LER rates     :", lrates)
+        print("LER norm rates:", norm_lrates)
+        print("########################################################")
+        print("Test WER average is   :", mean)
+        print("Test LER average is   :", lmean)
+        print("Test normalised LER is:", norm_lmean)
+        print("########################################################")
+        # print("(note both WER and LER use LanguageModel not raw output)")
 
-                lm_edit_dist = editdistance.eval(label, corrected) ## todo test edit distance with strings
-                lm_mean_ed += float(lm_edit_dist)
-                lm_mean_norm_ed += float(lm_edit_dist) / len(label)
-                # if(j % 16 == 0):
-                #     print("\n{}.Truth:{}\n{}.Trans:{}".format(str(j), word_batch['source_str'][j], str(j), decoded_res[j]))
-
-        print('\nOut of %d samples:  Mean edit distance: %.3f Mean normalized edit distance: %0.3f'
-                  % (count, mean_ed, mean_norm_ed))
-        print('\nOut of %d samples:  LM Mean edit distance: %.3f LM Mean normalized edit distance: %0.3f'
-              % (count, lm_mean_ed, lm_mean_norm_ed))
+        self.mean_wer_log.append(mean)
+        self.mean_ler_log.append(lmean)
+        self.norm_mean_ler_log.append(norm_lmean)
 
     def on_epoch_end(self, epoch, logs=None):
 
         self.validate_epoch_end()
+        save_model(self.model, name="./checkpoints/epoch/{}_epoch_check".format(self.runtimestr))
+
         #word_batch = next(self.validdata_next_val)[0]
         #result = decode_batch(self.test_func, word_batch['the_input'][0])
         #print("Truth: {} \nTranscribed: {}".format(word_batch['source_str'], result[0]))
@@ -344,8 +316,28 @@ def wers(originals, results):
         rates.append(rate)
     return rates, mean / float(count)
 
-# The following code is from: http://hetland.org/coding/python/levenshtein.py
+def lers(originals, results):
+    count = len(originals)
+    rates = []
+    norm_rates = []
 
+    mean = 0.0
+    norm_mean = 0.0
+
+
+    assert count == len(results)
+    for i in range(count):
+        rate = levenshtein(originals[i], results[i])
+        mean = mean + rate
+        norm_mean = norm_mean + (float(rate) / len(originals[i]))
+
+        rates.append(rate)
+        norm_rates.append(norm_mean)
+
+    return rates, (mean / float(count)), norm_rates, (norm_mean/float(count))
+
+
+# The following code is from: http://hetland.org/coding/python/levenshtein.py
 def levenshtein(a,b):
     "Calculates the Levenshtein distance between a and b."
     n, m = len(a), len(b)
@@ -433,6 +425,8 @@ def edits2(word):
     return (e2 for e1 in edits1(word) for e2 in edits1(e1))
 
 
+##############################################################################
+
 def spectrogram(samples, fft_length=256, sample_rate=2, hop_length=128):
     """
     Compute the spectrogram for a real signal.
@@ -519,7 +513,6 @@ def spectrogram_from_file(filename, step=10, window=20, max_freq=None,
             hop_length=hop_length)
         ind = np.where(freqs <= max_freq)[0][-1] + 1
     return np.transpose(np.log(pxx[:ind, :] + eps))
-
 
 def featurise(audio_clip):
     """ For a given audio clip, calculate the log of its Fourier Transform

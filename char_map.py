@@ -2,34 +2,35 @@
 # From Baidu ba-dls-deepspeech - https://github.com/baidu-research/ba-dls-deepspeech
 
 char_map_str = """
-' 1
-<SPACE> 2
-a 3
-b 4
-c 5
-d 6
-e 7
-f 8
-g 9
-h 10
-i 11
-j 12
-k 13
-l 14
-m 15
-n 16
-o 17
-p 18
-q 19
-r 20
-s 21
-t 22
-u 23
-v 24
-w 25
-x 26
-y 27
-z 28
+<SPACE> 0
+a 1
+b 2
+c 3
+d 4
+e 5
+f 6
+g 7
+h 8
+i 9
+j 10
+k 11
+l 12
+m 13
+n 14
+o 15
+p 16
+q 17
+r 18
+s 19
+t 20
+u 21
+v 22
+w 23
+x 24
+y 25
+z 26
+' 27
+
 """
 
 char_map = {}
@@ -39,4 +40,6 @@ for line in char_map_str.strip().split('\n'):
     ch, index = line.split()
     char_map[ch] = int(index)
     index_map[int(index)] = ch
-index_map[2] = ' '
+
+index_map[0] = ' '
+

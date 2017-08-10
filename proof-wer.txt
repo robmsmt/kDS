@@ -1,0 +1,141 @@
+def wer(original, result):
+  ...:     r"""
+  ...:     The WER is defined as the editing/Levenshtein distance on word level
+  ...:     divided by the amount of words in the original text.
+  ...:     In case of the original having more words (N) than the result and both
+  ...:     being totally different (all N words resulting in 1 edit operation each),
+  ...:     the WER will always be 1 (N / N = 1).
+  ...:     """
+  ...:     # The WER ist calculated on word (and NOT on character) level.
+  ...:     # Therefore we split the strings into words first:
+  ...:     original = original.split()
+  ...:     result = result.split()
+  ...:     return levenshtein(original, result) / float(len(original))
+  ...:
+In[3]: def wers(originals, results):
+  ...:     count = len(originals)
+  ...:     rates = []
+  ...:     mean = 0.0
+  ...:     assert count == len(results)
+  ...:     for i in range(count):
+  ...:         rate = wer(originals[i], results[i])
+  ...:         mean = mean + rate
+  ...:         rates.append(rate)
+  ...:     return rates, mean / float(count)
+  ...:
+In[4]: def levenshtein(a,b):
+  ...:     "Calculates the Levenshtein distance between a and b."
+  ...:     n, m = len(a), len(b)
+  ...:     if n > m:
+  ...:         # Make sure n <= m, to use O(min(n,m)) space
+  ...:         a,b = b,a
+  ...:         n,m = m,n
+  ...:
+  ...:     current = list(range(n+1))
+  ...:     for i in range(1,m+1):
+  ...:         previous, current = current, [i]+[0]*n
+  ...:         for j in range(1,n+1):
+  ...:             add, delete = previous[j]+1, current[j-1]+1
+  ...:             change = previous[j-1]
+  ...:             if a[j-1] != b[i-1]:
+  ...:                 change = change + 1
+  ...:             current[j] = min(add, delete, change)
+  ...:
+  ...:     return current[n]
+  ...:
+In[5]: a = "the cat sat on the mat"
+In[6]: b = "tte cat sat on the mat"
+In[7]: levenshtein(a,b)
+Out[7]: 1
+In[8]: b = "the cat sat on the mat"
+In[9]: levenshtein(a,b)
+Out[9]: 0
+In[10]: b = "ttt cat sat on the mat"
+In[11]: levenshtein(a,b)
+Out[11]: 2
+In[12]: b = "ccc cat sat on the mat"
+In[13]: levenshtein(a,b)
+Out[13]: 3
+In[14]: b = "the-cat-sat-on-the-mat"
+In[15]: levenshtein(a,b)
+Out[15]: 5
+In[16]: b = ""
+In[17]: levenshtein(a,b)
+Out[17]: 22
+In[18]: a = "the cat sat on the mat"
+In[19]: b = "tte cat sat on the mat"
+   ...:
+In[20]: a,b = b,a
+In[21]: levenshtein(a,b)
+Out[21]: 1
+In[22]: levenshtein(b,a)
+Out[22]: 1
+In[23]: a = "the cat sat on the mat"
+   ...:
+In[24]: b = "tte cat sat on the mat"
+   ...:
+In[25]: wer(a,b)
+Out[25]: 0.16666666666666666
+In[26]: b = "the cat sat on the mat"
+   ...:
+   ...:
+   ...:
+In[27]: wer(a,b)
+Out[27]: 0.0
+In[28]: b = "da catt satt on da matt"
+In[29]: wer(a,b)
+Out[29]: 0.8333333333333334
+In[30]: words = 6
+In[31]: #lets compare each
+In[32]: a = "the"; b = "da"
+In[33]: levenshtein(a,b)
+Out[33]: 3
+In[34]: a = "cat"; b = "catt"
+In[35]: levenshtein(a,b)
+Out[35]: 1
+In[36]: a = "sat"; b = "satt"
+In[37]: levenshtein(a,b)
+Out[37]: 1
+In[38]: a = "on"; b = "on"
+In[39]: a = "the"; b = "da"
+In[40]: a = "on"; b = "on"
+In[41]: levenshtein(a,b)
+Out[41]: 0
+In[42]: a = "the"; b = "da"
+In[43]: levenshtein(a,b)
+Out[43]: 3
+In[44]: a = "mat"; b = "matt"
+In[45]: levenshtein(a,b)
+Out[45]: 1
+In[46]: sum = 3+1+1+0+3+1
+In[47]: sum
+Out[47]: 9
+In[48]: a = "the cat sat on the mat"
+In[49]: b = "da catt satt on da matt"
+In[50]: levenshtein(a,b)
+Out[50]: 9
+In[51]: 9/float(len(a))
+Out[51]: 0.4090909090909091
+In[52]: wer(a,b)
+Out[52]: 0.8333333333333334
+In[53]: 5 / float(len(a.split()))
+Out[53]: 0.8333333333333334
+In[54]: 5/ float(6)
+Out[54]: 0.8333333333333334
+In[55]: #wers proof
+In[56]: a = ["the cat sat on the mat", "the dog barked", "john fell over"]
+In[57]: b = ["da cat satt on da matt", "da dog barked", "jim fell over"]
+In[58]: wers(a,b)
+Out[58]:
+([0.6666666666666666, 0.3333333333333333, 0.3333333333333333],
+ 0.4444444444444444)
+In[59]: wer(a[0],b[0])
+Out[59]: 0.6666666666666666
+In[60]: wer(a[1],b[1])
+Out[60]: 0.3333333333333333
+In[61]: wer(a[2],b[2])
+Out[61]: 0.3333333333333333
+In[62]: sum=0.66+0.33+0.33
+In[63]: sum / float(3)
+Out[63]: 0.44
+

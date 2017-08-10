@@ -34,9 +34,12 @@ def main(checkpointpath):
                                                              fc_size=2048,
                                                              rnn_size=512,
                                                              mfcc_features=26,
-                                                             max_mfcclength_audio=778,
-                                                             dropout=[0.2, 0.5, 0.3],
-                                                             num_classes=30)
+                                                             dropout=[0.0, 0.0, 0.0],
+                                                             num_classes=29)
+
+        # sgd = SGD(lr=0.02, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=5)
+        # model.compile(loss='', optimizer=sgd)
+        print(model.summary(line_length=80))
 
         print("Retry converting new model")
         coreml_model = coremltools.converters.keras.convert(model)
@@ -51,19 +54,22 @@ def main(checkpointpath):
     coreml_model.output_description['output1'] = 'Audio transcription'
 
     # SAVE CoreML
-    coreml_model.save('kds.mlmodel')
+    coreml_model.save('microkds.mlmodel')
 
     ##Export the trimmed model (without CTC) to test that it works on python
-    save_model(model, name='./checkpoints/TRIMMED_ds_model')
+    save_trimmed_model(model, name='./checkpoints/trimmed/TRIMMED_ds_model')
     print("Completed")
+
+
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
     ##defaults to the finished checkpoint
-    parser.add_argument('--checkpointpath', type=str, default="./checkpoints/ds_ctc_FIN",
-                       help='If true, we sort utterances by their length in the first epoch')
+    parser.add_argument('--checkpointpath', type=str, default="./checkpoints/fin/"
+                       "DS1_2017-08-08_20-55_ds_ctc_FIN_loss333",
+                       help='checkpoint path to look in')
 
     args = parser.parse_args()
 
