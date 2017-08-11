@@ -31,9 +31,12 @@ from keras.optimizers import SGD, adam
 from keras.layers import TimeDistributed, Dropout
 from keras.layers.merge import add  # , # concatenate BAD FOR COREML
 from keras.utils.conv_utils import conv_output_length
+from keras.activations import relu
 
 import tensorflow as tf
 
+def clipped_relu(x):
+    return relu(x, max_value=20)
 
 # Define CTC loss
 def ctc_lambda_func(args):
@@ -141,11 +144,10 @@ def ds1(fc_size=2048, rnn_size=512, mfcc_features=26, num_classes=29):
 
     input_data = Input(name='the_input', shape=(None,mfcc_features))  # >>(?, 778, 26)
 
-
     # First 3 FC layers
-    x = TimeDistributed(Dense(fc_size, name='fc1', activation='relu'))(input_data)  # >>(?, 778, 2048)
-    x = TimeDistributed(Dense(fc_size, name='fc2', activation='relu'))(x)  # >>(?, 778, 2048)
-    x = TimeDistributed(Dense(fc_size, name='fc3', activation='relu'))(x)  # >>(?, 778, 2048)
+    x = TimeDistributed(Dense(fc_size, name='fc1', activation=clipped_relu))(input_data)  # >>(?, 778, 2048)
+    x = TimeDistributed(Dense(fc_size, name='fc2', activation=clipped_relu))(x)  # >>(?, 778, 2048)
+    x = TimeDistributed(Dense(fc_size, name='fc3', activation=clipped_relu))(x)  # >>(?, 778, 2048)
 
     # Layer 4 BiDirectional RNN
     # rnn_1f = SimpleRNN(rnn_size, return_sequences=True, go_backwards=False,
@@ -155,8 +157,14 @@ def ds1(fc_size=2048, rnn_size=512, mfcc_features=26, num_classes=29):
     #                    kernel_initializer='he_normal', name='rnn_b')(x)  # >>(?, ?, 512) ,
     # rnn_bidir = add([rnn_1f, rnn_1b])
 
-    x = Bidirectional(SimpleRNN(rnn_size, return_sequences=True, activation='relu', kernel_initializer='he_normal'),
-                      merge_mode='sum')(x)
+
+    x = Bidirectional(SimpleRNN(rnn_size, return_sequences=True, activation='relu',
+                                kernel_initializer='he_normal'), merge_mode='sum')(x)  #
+
+    # x = Activation(recur_clipped_relu)(x)
+
+    # x = SimpleRNN(rnn_size, return_sequences=True, activation=recur_clipped_relu,
+    #                             kernel_initializer='he_normal')(x)
 
     # Layer 5+6 Time Dist Layer & Softmax
     y_pred = TimeDistributed(Dense(num_classes, name="y_pred", activation="softmax"))(x)

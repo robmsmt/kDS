@@ -110,7 +110,7 @@ def main(args, runtime):
         if(args.deepspeech==1):
             print('DS{}'.format(args.deepspeech))
             model, input_data, y_pred, input_length = ds1(fc_size=2048, rnn_size=512,mfcc_features=26,num_classes=29)
-            opt = SGD(lr=0.02, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=5)
+            opt = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=5)
 
         elif(args.deepspeech==2):
             print('DS{}'.format(args.deepspeech))
@@ -192,7 +192,7 @@ if __name__ == '__main__':
                        help='batch_size used to train the model')
     parser.add_argument('--tensorboard', type=bool, default=True,
                        help='batch_size used to train the model')
-    parser.add_argument('--deepspeech', type=int, default=2,
+    parser.add_argument('--deepspeech', type=int, default=1,
                        help='choose between deepspeech versions (when training not loading) '
                             '--deepspeech=1 uses fully connected layers with simplernn'
                             '--deepspeech=2 uses fully connected with GRU'
