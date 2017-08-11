@@ -152,7 +152,8 @@ def main(args, runtime):
                         callbacks=[tb_cb, test_cb, traindata, validdata],  ##create custom callback to handle stop for valid
                         # validation_data=validdata.next_batch(),
                         # validation_steps=1,
-                        initial_epoch=0
+                        initial_epoch=0,
+                        verbose=2
                         )
 
     ## These are the most important metrics
