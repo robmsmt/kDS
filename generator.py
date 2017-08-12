@@ -279,8 +279,8 @@ class TestCallback(callbacks.Callback):
                     cor_wer = wer(label, corrected)
                     dec_wer = wer(label, decode_sent)
 
-                    #if(dec_wer < 0.5 or cor_wer < 0.5):
-                    print("\n{}.GroundTruth:{}\n{}.Transcribed:{}\n{}.LMCorrected:{}".format(str(j), label,
+                    if(dec_wer < 0.5 or cor_wer < 0.5):
+                        print("\n{}.GroundTruth:{}\n{}.Transcribed:{}\n{}.LMCorrected:{}".format(str(j), label,
                                                                                      str(j), decode_sent,
                                                                                      str(j), corrected))
 
@@ -309,7 +309,7 @@ class TestCallback(callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs=None):
 
-        self.validate_epoch_end()
+        self.validate_epoch_end(verbose=1)
         save_model(self.model, name="./checkpoints/epoch/{}_epoch_check".format(self.runtimestr))
 
         #word_batch = next(self.validdata_next_val)[0]
