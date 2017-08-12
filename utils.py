@@ -125,7 +125,14 @@ def save_model(model, name):
 
     return
 
+# from keras.activations import relu
+# def clipped_relu(x):
+#     return relu(x, max_value=20)
+
 def load_model_checkpoint(path, summary=True):
+
+    from model import relu
+
     jsonfilename = path+".json"
     weightsfilename = path+"_weights.h5"
 
@@ -161,6 +168,16 @@ def get_librispeech_data_path():
         datapath = "/home/rob/Dropbox/UCL/DIS/Admin/LibriSpeech/"
     else:
         datapath = "/cluster/project2/darkspeech/rob/DeepSpeech/data/LibriSpeech/"
+    target = datapath + ""
+    return target
+
+def get_ted_data_path():
+    ## Use hostname to detect my laptop OR else it's cluster
+    hostname = socket.gethostname().lower()
+    if hostname in ('rs-e5550').lower():
+        datapath = "/home/rob/Dropbox/UCL/DIS/Admin/ted/"
+    else:
+        datapath = "/cluster/project2/darkspeech/rob/DeepSpeech/data/ted/"
     target = datapath + ""
     return target
 

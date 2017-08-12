@@ -140,6 +140,9 @@ def ds1_dropout(fc_size=2048, rnn_size=512, mfcc_features=26,
 
 
 def ds1(fc_size=2048, rnn_size=512, mfcc_features=26, num_classes=29):
+    # hack to get clipped_relu to work on bidir layer
+    from keras.utils.generic_utils import get_custom_objects
+    get_custom_objects().update({"clipped_relu": clipped_relu})
 
 
     input_data = Input(name='the_input', shape=(None,mfcc_features))  # >>(?, 778, 26)
@@ -149,22 +152,9 @@ def ds1(fc_size=2048, rnn_size=512, mfcc_features=26, num_classes=29):
     x = TimeDistributed(Dense(fc_size, name='fc2', activation=clipped_relu))(x)  # >>(?, 778, 2048)
     x = TimeDistributed(Dense(fc_size, name='fc3', activation=clipped_relu))(x)  # >>(?, 778, 2048)
 
-    # Layer 4 BiDirectional RNN
-    # rnn_1f = SimpleRNN(rnn_size, return_sequences=True, go_backwards=False,
-    #                    kernel_initializer='he_normal', name='rnn_f')(x)  # >>(?, ?, 512) ,
-    #
-    # rnn_1b = SimpleRNN(rnn_size, return_sequences=True, go_backwards=True,
-    #                    kernel_initializer='he_normal', name='rnn_b')(x)  # >>(?, ?, 512) ,
-    # rnn_bidir = add([rnn_1f, rnn_1b])
-
-
-    x = Bidirectional(SimpleRNN(rnn_size, return_sequences=True, activation='relu',
+    # Layer 4 BiDirectional RNN - note coreml only supports LSTM BIDIR
+    x = Bidirectional(LSTM(rnn_size, return_sequences=True, activation=clipped_relu,
                                 kernel_initializer='he_normal'), merge_mode='sum')(x)  #
-
-    # x = Activation(recur_clipped_relu)(x)
-
-    # x = SimpleRNN(rnn_size, return_sequences=True, activation=recur_clipped_relu,
-    #                             kernel_initializer='he_normal')(x)
 
     # Layer 5+6 Time Dist Layer & Softmax
     y_pred = TimeDistributed(Dense(num_classes, name="y_pred", activation="softmax"))(x)
@@ -212,28 +202,15 @@ def build_ds1_simple_rnn_no_ctc_and_xfer_weights(loaded_model, fc_size=2048, rnn
     x = TimeDistributed(Dense(fc_size, name='fc3', activation='relu',
                               weights=loaded_model.layers[3].get_weights()))(x)  # >>(?, 778, 2048)
 
-    # Layer 4 BiDirectional RNN
-    rnn_1f = SimpleRNN(rnn_size, return_sequences=True, go_backwards=False,
-                       kernel_initializer='he_normal', name='rnn_f',
-        weights = loaded_model.layers[4].get_weights())(x)  # >>(?, ?, 512) ,
-
-    rnn_1b = SimpleRNN(rnn_size, return_sequences=True, go_backwards=True,
-                       kernel_initializer='he_normal', name='rnn_b',
-        weights = loaded_model.layers[5].get_weights())(x)  # >>(?, ?, 512) ,
-
-    # rnn_bidir = concatenate([rnn_1f, rnn_1b]) ### CONCAT DOESN'T WORK IN COREML FFS
-    rnn_bidir = add([rnn_1f, rnn_1b])
+    # Layer 4 BiDirectional RNN - note coreml only supports LSTM BIDIR
+    x = Bidirectional(LSTM(rnn_size, return_sequences=True, activation='relu',
+                                kernel_initializer='he_normal',
+                                weights=loaded_model.layers[4].get_weights()),
+                                merge_mode='sum')(x)
 
     # Layer 5+6 Time Dist Layer & Softmax
     y_pred = TimeDistributed(Dense(num_classes, name="y_pred", activation="softmax",
-        weights = loaded_model.layers[7].get_weights()))(x)
-
-    # Change shape
-    # labels = Input(name='the_labels', shape=[80], dtype='float32')
-    # input_length = Input(name='input_length', shape=[1], dtype='int64')
-    # label_length = Input(name='label_length', shape=[1], dtype='int64')
-    # model = Model(inputs=[input_data, labels, input_length, label_length], outputs=loss_out)
-    # model.compile(loss={'ctc': lambda y_true, y_pred: y_pred}, optimizer=sgd)
+        weights=loaded_model.layers[5].get_weights()))(x)
 
     model = Model(inputs=input_data, outputs=y_pred)
 

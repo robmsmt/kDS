@@ -52,22 +52,26 @@ def main(args, runtime):
     print("Information about test set:")
     print(df_supertest.describe())
 
-    ## 1b. load in Librispeech
+    ## 1b. load in Librispeech & TED
     libri_path = get_librispeech_data_path()
+    ted_path = get_ted_data_path()
 
     lib_filelist = ["librivox-dev-clean.csv,", "librivox-dev-other.csv,",
                 "librivox-train-clean-100.csv,","librivox-train-clean-360.csv,", "librivox-train-other-500.csv,",
                 "librivox-test-clean.csv,","librivox-test-other.csv"]
 
-    if socket.gethostname().lower() in 'rs-e5550'.lower(): lib_filelist=["librivox-dev-clean.csv"]
+    ted_filelist = ["ted-dev.csv,","ted-train.csv,","ted-test.csv"]
 
-    # timit_filelist = ["df_all.csv"]
+    if socket.gethostname().lower() in 'rs-e5550'.lower(): lib_filelist=["librivox-dev-clean.csv"]; ted_filelist=["ted-dev.csv"]
 
-    csvs = ""
+    csvs, csvs2 = "", ""
     for f in lib_filelist:
         csvs = csvs + libri_path + f
+    for f in ted_filelist:
+        csvs2 = csvs2 + ted_path + f
 
-    lib_dataproperties, df_lib_all = check_all_wavs_and_trans_from_csvs(csvs, df_train)
+    _, df_lib_all = check_all_wavs_and_trans_from_csvs(csvs, df_train)
+    lib_dataproperties, df_lib_all = check_all_wavs_and_trans_from_csvs(csvs2, df_lib_all)
 
 
 
@@ -109,8 +113,8 @@ def main(args, runtime):
         # new model
         if(args.deepspeech==1):
             print('DS{}'.format(args.deepspeech))
-            model, input_data, y_pred, input_length = ds1(fc_size=2048, rnn_size=512,mfcc_features=26,num_classes=29)
-            opt = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=5)
+            model, input_data, y_pred, input_length = ds1(fc_size=512, rnn_size=512, mfcc_features=26,num_classes=29)
+            opt = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=5)
 
         elif(args.deepspeech==2):
             print('DS{}'.format(args.deepspeech))
@@ -153,7 +157,7 @@ def main(args, runtime):
                         # validation_data=validdata.next_batch(),
                         # validation_steps=1,
                         initial_epoch=0,
-                        verbose=2
+                        verbose=1
                         )
 
     ## These are the most important metrics

@@ -246,7 +246,7 @@ class TestCallback(callbacks.Callback):
         self.norm_mean_ler_log = []
 
 
-    def validate_epoch_end(self):
+    def validate_epoch_end(self, verbose=0):
 
         originals = []
         results = []
@@ -274,15 +274,17 @@ class TestCallback(callbacks.Callback):
                 decode_sent = decoded_res[j]
                 corrected = correction(decode_sent)
                 label = word_batch['source_str'][j]
-                # cor_wer = wer(label, corrected)
-                # dec_wer = wer(label, decode_sent)
 
-                # if(dec_wer < 0.5 or cor_wer < 0.5):
-                #     print("\n{}.GroundTruth:{}\n{}.Transcribed:{}\n{}.LMCorrected:{}".format(str(j), label,
-                #                                                                  str(j), decode_sent,
-                #                                                                  str(j), corrected))
-                #
-                #     print("Sample Decoded WER:{}, Corrected LM WER:{}".format(dec_wer, cor_wer))
+                if verbose:
+                    cor_wer = wer(label, corrected)
+                    dec_wer = wer(label, decode_sent)
+
+                    #if(dec_wer < 0.5 or cor_wer < 0.5):
+                    print("\n{}.GroundTruth:{}\n{}.Transcribed:{}\n{}.LMCorrected:{}".format(str(j), label,
+                                                                                     str(j), decode_sent,
+                                                                                     str(j), corrected))
+
+                    # print("Sample Decoded WER:{}, Corrected LM WER:{}".format(dec_wer, cor_wer))
 
                 originals.append(label)
                 results.append(corrected)

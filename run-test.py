@@ -40,15 +40,16 @@ def main(checkpointpath, runtimestr):
     df_supertest = pd.concat(frames)
 
     ## 2. init data generators
-    testdata = BaseGenerator(dataframe=df_supertest, dataproperties=dataproperties, batch_size=2)
+    testdata = BaseGenerator(dataframe=df_supertest, dataproperties=dataproperties, batch_size=2,
+                             training=False, spectogram=False)
 
 
     ## 3. Load existing or error
     if checkpointpath:
         # load existing
 
-        fresh_model, input_data, y_pred = ds1(fc_size=2048, rnn_size=512,
-                                              mfcc_features=26, num_classes=29)
+        fresh_model, input_data, y_pred, input_length = ds1(fc_size=512, rnn_size=512,
+                                                        mfcc_features=26, num_classes=29)
 
         model = load_model_checkpoint(checkpointpath)
         sgd = SGD(lr=0.02, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=5)
@@ -82,7 +83,7 @@ def main(checkpointpath, runtimestr):
     print(pred.shape)
     np.savetxt('./test_mfccs/new/test_output.csv', pred[0, :, :], delimiter=',')
 
-    ## 5. EVALUATE (same as iOS?)
+    ## 5. EVALUATE (just produces loss and metrics
 
     # out = [ 6, 17, 16,  1, 22,  2,  3, 21, 13,  2, 15,  7,  2, 22, 17,  2,  5,  3, 20, 20, 27,  2,  3, 16,
     #         2, 17, 11, 14, 27,  2, 20,  3,  9,  2, 14, 11, 13,  7,  2, 22, 10,  3, 22]
@@ -92,14 +93,19 @@ def main(checkpointpath, runtimestr):
 
     ## 5. CUSTOM
     # pretend that epoch is finished and exec
+    # decode = None
+    #
+    #
+    # test_iterate = K.function([model.layers[0].input, K.learning_phase()],[model.layers[4].output])
 
-    iterate = K.function([input_data, K.learning_phase()], [y_pred])
-    test_cb = TestCallback(iterate, testdata, model=model, runtimestr=runtimestr)
-
-    res = test_cb.validate_epoch_end()
-
-    print(test_cb.mean_wer_log)
-
+    # iterate = K.function([input_data, K.learning_phase()], [y_pred])
+    # test_cb = TestCallback(iterate, testdata, model, runtimestr, decode)
+    #
+    # res = test_cb.validate_epoch_end(verbose=1)
+    #
+    # print("Mean WER   :", test_cb.mean_wer_log)
+    # print("Mean LER   :", test_cb.mean_ler_log)
+    # print("NormMeanLER:",test_cb.norm_mean_ler_log)
 
 #######################################################
 
@@ -110,7 +116,8 @@ if __name__ == '__main__':
 
 
     # parser.add_argument('--fullcheckpointpath', type=str, default="./checkpoints/TRIMMED_ds_model",
-    parser.add_argument('--checkpointpath', type=str, default="./checkpoints/trimmed/TRIMMED_ds_model",
+    parser.add_argument('--checkpointpath', type=str,
+                        default="./checkpoints/trimmed/TRIMMED_ds_model",
                         help='load checkpoint at this path')
 
 
