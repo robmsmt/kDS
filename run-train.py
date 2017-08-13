@@ -177,7 +177,7 @@ def main(args, runtime):
     # decode = K.function([y_pred, input_length], [dec])
     decode = None # temp
 
-    test_cb = TestCallback(iterate, model, validdata, traindata, runtimestr, decode)
+    test_cb = TestCallback(iterate, validdata, traindata, model, runtimestr, decode)
     tb_cb = BlankCallback()
 
     if args.tensorboard:
