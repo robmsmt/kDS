@@ -49,7 +49,7 @@ def get_all_wavs_in_path(target, sortagrad=True):
     Builds a list of the wavs, transcriptions and finish times (for sorting) of a directory
 
     :param target: directory to search for wavs
-    :param sortagrad: sort all/training dataframes
+    :param sortagrad: sort all dataframes
     :return: dataproperties dict and 4 dataframes (all/train/valid/test)
 
     '''
@@ -231,6 +231,8 @@ def check_all_wavs_and_trans_from_csvs(csvs, timit, sortagrad=True):
 
     if sortagrad:
         df_final = df_final.sort_values(by='wav_filesize', ascending=True)
+    else:
+        df_final = df_final.sample(frac=1).reset_index(drop=True)
 
     return dataproperties, df_final
 

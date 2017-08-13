@@ -32,6 +32,39 @@ from keras.optimizers import Adam
 # Prevent pool_allocator message
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
+#######################################################
+import resource
+import gc
+
+memlist = []
+
+class MemoryCallback(keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, log={}):
+        x = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # print(gc.get_count())
+        # gc.collect()
+        # print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+        # print(gc.get_count())
+        print(x)
+
+        if x > 5000000:
+            from pympler import muppy, summary
+            global memlist
+
+            all_objects = muppy.get_objects()
+            print(len(all_objects))
+            sum1 = summary.summarize(all_objects)
+            memlist.append(sum1)
+            summary.print_(sum1)
+            if len(memlist)>1:
+                # compare with last
+                diff = summary.get_diff(memlist[-2], memlist[-1])
+                summary.print_(diff)
+
+            print("Memory error use breakpoint to debug")
+
+
+
 def main(args, runtime):
     '''
     There are 5 simple steps to this program
@@ -70,8 +103,8 @@ def main(args, runtime):
     for f in ted_filelist:
         csvs2 = csvs2 + ted_path + f
 
-    _, df_lib_all = check_all_wavs_and_trans_from_csvs(csvs, df_train)
-    lib_dataproperties, df_lib_all = check_all_wavs_and_trans_from_csvs(csvs2, df_lib_all)
+    _, df_lib_all = check_all_wavs_and_trans_from_csvs(csvs, df_train, sortagrad=args.sortagrad)
+    lib_dataproperties, df_lib_all = check_all_wavs_and_trans_from_csvs(csvs2, df_lib_all, sortagrad=args.sortagrad)
 
 
 
@@ -137,14 +170,14 @@ def main(args, runtime):
     # valid_steps = (len(df_supertest.index) // batchsize)
 
     ## Laptop testmode
-    if socket.gethostname().lower() in 'rs-e5550'.lower(): train_steps = 4; args.tensorboard=False; args.epochs=4
+    if socket.gethostname().lower() in 'rs-e5550'.lower():  args.tensorboard=False; args.epochs=50; train_steps = 12
 
 
     iterate = K.function([input_data, K.learning_phase()], [y_pred])
     # decode = K.function([y_pred, input_length], [dec])
     decode = None # temp
 
-    test_cb = TestCallback(iterate, validdata, model, runtimestr, decode)
+    test_cb = TestCallback(iterate, model, validdata, traindata, runtimestr, decode)
     tb_cb = BlankCallback()
 
     if args.tensorboard:
@@ -153,22 +186,21 @@ def main(args, runtime):
     model.fit_generator(generator=traindata.next_batch(),
                         steps_per_epoch=train_steps,
                         epochs=args.epochs,
-                        callbacks=[tb_cb, test_cb, traindata, validdata],  ##create custom callback to handle stop for valid
+                        callbacks=[tb_cb, test_cb, MemoryCallback()],  ##create custom callback to handle stop for valid
                         # validation_data=validdata.next_batch(),
                         # validation_steps=1,
                         initial_epoch=0,
-                        verbose=1
+                        verbose=0
                         )
 
     ## These are the most important metrics
     print("Mean WER   :", test_cb.mean_wer_log)
     print("Mean LER   :", test_cb.mean_ler_log)
-    print("NormMeanLER:",test_cb.norm_mean_ler_log)
+    print("NormMeanLER:", test_cb.norm_mean_ler_log)
 
     ## 5. final test - move this to run-test
     res = model.evaluate_generator(validdata.next_batch(), 8, max_q_size=10, workers=1)
     print(res)
-
 
     ## save final version of model
     save_model(model, name="./checkpoints/fin/{}_ds_ctc_FIN_loss{}".format(runtimestr,int(res)))

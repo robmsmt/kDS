@@ -60,7 +60,7 @@ def get_xsize(val):
     return val.shape[0]
 
 
-class BaseGenerator(callbacks.Callback):
+class BaseGenerator(object):
     def __init__(self, dataframe, dataproperties, training, batch_size=16, spectogram=False):
         self.training_data = training
         self.spectogram = spectogram
@@ -169,6 +169,7 @@ class BaseGenerator(callbacks.Callback):
             assert (self.batch_size <= len(self.wavpath))
             if (self.cur_index + 1) * self.batch_size >= len(self.wavpath) - self.batch_size:
                 self.cur_index = 0
+                print("EVERYDAY I AM SHUFFLING SHUFFLING")
                 self.wavpath, self.transcript, self.finish = shuffle(self.wavpath,
                                                                      self.transcript,
                                                                      self.finish)
@@ -190,12 +191,20 @@ class BaseGenerator(callbacks.Callback):
         # self.feats_std = np.std(feats, axis=0)
         pass
 
-    def on_epoch_end(self, epoch, logs={}):
-        if(self.training_data):
-            print("EPOCH END - shuffling data")
-            self.wavpath, self.transcript, self.finish = shuffle(self.wavpath,
+    # def on_epoch_end(self, epoch, logs={}):
+    #     if(self.training_data) and False:
+    #         print("EPOCH END - shuffling data")
+    #         self.wavpath, self.transcript, self.finish = shuffle(self.wavpath,
+    #                                                          self.transcript,
+    #                                                          self.finish)
+
+
+    def shuffle_data(self):
+        self.wavpath, self.transcript, self.finish = shuffle(self.wavpath,
                                                              self.transcript,
                                                              self.finish)
+        return
+
 
     def export_test_mfcc(self):
         # this is used to export data e.g. into iOS
@@ -221,15 +230,17 @@ class BaseGenerator(callbacks.Callback):
 
 
 class BlankCallback(callbacks.Callback):
+    #used incase tensorboard not required
     pass
 
 
 
 class TestCallback(callbacks.Callback):
-    def __init__(self, test_func, validdata, model, runtimestr, decccc):
+    def __init__(self, test_func, validdata, traindata, model, runtimestr, decccc):
         self.test_func = test_func
         self.test_decccc = decccc
         self.validdata = validdata
+        self.traindata = traindata
         self.validdata_next_val = self.validdata.next_batch()
         self.batch_size = validdata.batch_size
 
@@ -307,11 +318,18 @@ class TestCallback(callbacks.Callback):
         self.mean_ler_log.append(lmean)
         self.norm_mean_ler_log.append(norm_lmean)
 
+        #delete all values?
+        # del originals, results, count, allvalid
+        # del word_batch, decoded_res
+        # del decode_sent,
+
+
+
     def on_epoch_end(self, epoch, logs=None):
 
         self.validate_epoch_end(verbose=1)
         save_model(self.model, name="./checkpoints/epoch/{}_epoch_check".format(self.runtimestr))
-
+        self.traindata.shuffle_data()
         #word_batch = next(self.validdata_next_val)[0]
         #result = decode_batch(self.test_func, word_batch['the_input'][0])
         #print("Truth: {} \nTranscribed: {}".format(word_batch['source_str'], result[0]))
