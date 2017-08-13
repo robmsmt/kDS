@@ -190,7 +190,7 @@ def main(args, runtime):
                         # validation_data=validdata.next_batch(),
                         # validation_steps=1,
                         initial_epoch=0,
-                        verbose=0
+                        verbose=1
                         )
 
     ## These are the most important metrics
